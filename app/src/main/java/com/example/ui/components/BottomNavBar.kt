@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -37,7 +36,6 @@ fun BottomNavBar(
     val navItems = listOf(
         NavItem("dashboard", "Home", Icons.Default.Home),
         NavItem("voice_profiles", "Profiles", Icons.Default.Person),
-        NavItem("stats", "Stats", Icons.Default.BarChart),
         NavItem("general_settings", "Settings", Icons.Default.Settings)
     )
 
@@ -47,7 +45,7 @@ fun BottomNavBar(
             .height(72.dp)
             .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             .background(SurfaceContainerLow)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -61,7 +59,7 @@ fun BottomNavBar(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { onNavigate(item.route) }
-                    .padding(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Icon(
                     imageVector = item.icon,
