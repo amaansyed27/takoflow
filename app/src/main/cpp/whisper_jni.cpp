@@ -16,7 +16,7 @@ std::string to_string(JNIEnv *env, jstring value) {
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_example_speech_WhisperBridge_nativeInit(
         JNIEnv *env,
-        jclass,
+        jobject,
         jstring model_path) {
     const std::string path = to_string(env, model_path);
     whisper_context_params context_params = whisper_context_default_params();
@@ -28,7 +28,7 @@ Java_com_example_speech_WhisperBridge_nativeInit(
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_speech_WhisperBridge_nativeTranscribe(
         JNIEnv *env,
-        jclass,
+        jobject,
         jlong context_pointer,
         jfloatArray samples_array) {
     auto *context = reinterpret_cast<whisper_context *>(context_pointer);
@@ -69,7 +69,7 @@ Java_com_example_speech_WhisperBridge_nativeTranscribe(
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_speech_WhisperBridge_nativeFree(
         JNIEnv *,
-        jclass,
+        jobject,
         jlong context_pointer) {
     auto *context = reinterpret_cast<whisper_context *>(context_pointer);
     if (context != nullptr) whisper_free(context);
