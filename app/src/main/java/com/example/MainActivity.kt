@@ -7,9 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -26,6 +26,7 @@ import com.example.ui.screens.VoiceDictationScreen
 import com.example.ui.screens.VoiceProfilesScreen
 import com.example.ui.screens.VoiceSettingsScreen
 import com.example.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,15 +38,10 @@ class MainActivity : ComponentActivity() {
             MyApplicationTheme {
                 val setupCompleted by preferences.setupCompleted.collectAsState(initial = false)
                 val navController = rememberNavController()
+                val scope = rememberCoroutineScope()
                 val currentBackStack by navController.currentBackStackEntryAsState()
                 val currentRoute = currentBackStack?.destination?.route
-
-                val isSetupRoute = currentRoute in listOf(
-                    "onboarding",
-                    "setup",
-                    "enable_keyboard"
-                )
-                
+                val isSetupRoute = currentRoute in listOf("onboarding", "setup", "enable_keyboard")
                 val startDestination = if (setupCompleted) "dashboard" else "onboarding"
 
                 Scaffold(
@@ -70,7 +66,6 @@ class MainActivity : ComponentActivity() {
                         startDestination = startDestination,
                         modifier = Modifier.padding(innerPadding)
                     ) {
-                        // Setup Flow
                         composable("onboarding") {
                             OnboardingScreen(
                                 onFinishOnboarding = {
@@ -81,34 +76,33 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("setup") {
-                            SetupScreen(
-                                onNavigateToEnable = {
-                                    navController.navigate("enable_keyboard")
-                                }
-                            )
+                            SetupScreen(onNavigateToEnable = { navController.navigate("enable_keyboard") })
                         }
                         composable("enable_keyboard") {
                             EnableKeyboardStepperScreen(
                                 onBack = { navController.popBackStack() },
                                 onCompleteSetup = {
-                                    navController.navigate("dashboard") {
-                                        popUpTo("onboarding") { inclusive = true }
-                                        popUpTo("setup") { inclusive = true }
-                                        popUpTo("enable_keyboard") { inclusive = true }
+                                    scope.launch {
+                                        preferences.setSetupCompleted(true)
+                                        preferences.setInferenceModel(com.example.speech.SpeechModels.VOSK)
+                                        navController.navigate("dashboard") {
+                                            popUpTo("onboarding") { inclusive = true }
+                                            popUpTo("setup") { inclusive = true }
+                                            popUpTo("enable_keyboard") { inclusive = true }
+                                        }
                                     }
                                 }
                             )
                         }
 
-                        // Main Flow
                         composable("dashboard") {
                             DashboardScreen(
+                                preferences = preferences,
                                 onNavigateToEnable = { navController.navigate("enable_keyboard") },
                                 onNavigateToVoiceSettings = { navController.navigate("voice_settings") },
                                 onNavigateToProfiles = { navController.navigate("voice_profiles") },
                                 onNavigateToGeneralSettings = { navController.navigate("general_settings") },
-                                onNavigateToDictation = { navController.navigate("dictation") },
-                                onNavigate = { route -> navController.navigate(route) }
+                                onNavigateToDictation = { navController.navigate("dictation") }
                             )
                         }
                         composable("voice_settings") {
