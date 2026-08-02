@@ -60,18 +60,20 @@ class SpeechModelManager private constructor(private val context: Context) {
     }
 
     fun refresh() {
-        _voskState.value = _voskState.value.copy(
-            installed = isVoskInstalled(),
-            downloading = false,
-            error = null,
-            progressPercent = if (isVoskInstalled()) 100 else 0
-        )
-        _whisperState.value = _whisperState.value.copy(
-            installed = isWhisperInstalled(),
-            downloading = false,
-            error = null,
-            progressPercent = if (isWhisperInstalled()) 100 else 0
-        )
+        if (!_voskState.value.downloading) {
+            val installed = isVoskInstalled()
+            _voskState.value = ModelDownloadState(
+                installed = installed,
+                progressPercent = if (installed) 100 else 0
+            )
+        }
+        if (!_whisperState.value.downloading) {
+            val installed = isWhisperInstalled()
+            _whisperState.value = ModelDownloadState(
+                installed = installed,
+                progressPercent = if (installed) 100 else 0
+            )
+        }
     }
 
     fun isVoskInstalled(): Boolean =
@@ -85,10 +87,12 @@ class SpeechModelManager private constructor(private val context: Context) {
     fun downloadVosk() {
         if (_voskState.value.downloading || isVoskInstalled()) return
         scope.launch {
-            val archive = File(context.cacheDir, "vosk-model.zip")
+            val archive = File(context.cacheDir, "vosk-model.zip.part")
             try {
+                archive.delete()
                 updateVosk(downloading = true, progress = 0, error = null)
                 downloadFile(VOSK_URL, archive) { updateVosk(true, it, null) }
+                voskModelDir.deleteRecursively()
                 unzipSafely(archive, modelsDir)
                 check(isVoskInstalled()) { "Downloaded Vosk archive did not contain a valid model." }
                 updateVosk(downloading = false, progress = 100, error = null, installed = true)
@@ -106,6 +110,7 @@ class SpeechModelManager private constructor(private val context: Context) {
         scope.launch {
             val partial = File(modelsDir, "ggml-tiny.en.bin.part")
             try {
+                partial.delete()
                 updateWhisper(downloading = true, progress = 0, error = null)
                 downloadFile(WHISPER_URL, partial) { updateWhisper(true, it, null) }
                 check(partial.length() > 70L * 1024L * 1024L) {
