@@ -5,16 +5,11 @@ internal class WhisperBridge(modelPath: String) : AutoCloseable {
         init {
             System.loadLibrary("takoflow_whisper")
         }
-
-        @JvmStatic
-        private external fun nativeInit(modelPath: String): Long
-
-        @JvmStatic
-        private external fun nativeTranscribe(contextPointer: Long, samples: FloatArray): String
-
-        @JvmStatic
-        private external fun nativeFree(contextPointer: Long)
     }
+
+    private external fun nativeInit(modelPath: String): Long
+    private external fun nativeTranscribe(contextPointer: Long, samples: FloatArray): String
+    private external fun nativeFree(contextPointer: Long)
 
     private var contextPointer: Long = nativeInit(modelPath)
 
