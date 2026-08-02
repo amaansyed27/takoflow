@@ -6,7 +6,8 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 36
+  ndkVersion = "28.2.13676358"
 
   defaultConfig {
     applicationId = "com.dawnlightlabs.takoflow"
