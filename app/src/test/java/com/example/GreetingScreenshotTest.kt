@@ -7,7 +7,12 @@ import com.example.ui.screens.OnboardingScreen
 import com.example.ui.theme.MyApplicationTheme
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class OnboardingComposeTest {
     @get:Rule
     val composeRule = createComposeRule()
