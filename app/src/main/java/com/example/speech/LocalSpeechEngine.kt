@@ -1,156 +1,292 @@
 package com.example.speech
 
+import android.Manifest
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.ToneGenerator
+import android.media.AudioManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
+import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
 import org.vosk.android.SpeechService
-import org.vosk.android.StorageService
-import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.max
 
 sealed class SpeechState {
-    object Idle : SpeechState()
-    object Listening : SpeechState()
+    data object Idle : SpeechState()
+    data object Listening : SpeechState()
     data class Processing(val partialText: String) : SpeechState()
     data class Success(val recognizedText: String) : SpeechState()
     data class Error(val message: String) : SpeechState()
 }
 
 class LocalSpeechEngine(private val context: Context) : RecognitionListener {
-
     private val _speechState = MutableStateFlow<SpeechState>(SpeechState.Idle)
     val speechState: StateFlow<SpeechState> = _speechState.asStateFlow()
 
     private val _rmsDb = MutableStateFlow(0f)
     val rmsDb: StateFlow<Float> = _rmsDb.asStateFlow()
 
-    private var speechService: SpeechService? = null
-    private var model: Model? = null
-    private var scope = CoroutineScope(Dispatchers.Main + Job())
-    private var simulatedJob: Job? = null
-    
-    var isWhisperInstalled: Boolean = false
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val modelManager = SpeechModelManager.get(context)
 
-    // Options
-    var activeModel: String = "Vosk" // "TakoFlow Whisper Small", "Vosk"
+    private var voskModel: Model? = null
+    private var speechService: SpeechService? = null
+    private var audioRecord: AudioRecord? = null
+    private var recordingJob: Job? = null
+    private var recordedPcm = ByteArrayOutputStream()
+    private var whisperBridge: WhisperBridge? = null
+
+    var activeModel: String = SpeechModels.VOSK
     var activeLanguage: String = "English (US)"
     var autoPunctuation: Boolean = true
     var autoCapitalization: Boolean = true
     var soundFeedbackEnabled: Boolean = true
-    var vibrationFeedbackEnabled: Boolean = true
-    var activeProfile: String = "default" // "default", "work", "notes", "creative"
-
-    init {
-        initModel()
-    }
-
-    private fun initModel() {
-        StorageService.unpack(context, "model", "model",
-            { model ->
-                this.model = model
-                Log.d("LocalSpeechEngine", "Vosk model loaded successfully")
-            },
-            { exception ->
-                Log.e("LocalSpeechEngine", "Failed to unpack the model", exception)
-            })
-    }
+    var vibrationFeedbackEnabled: Boolean = false
+    var activeProfile: String = "default"
 
     fun startListening() {
-        triggerFeedback()
-        _speechState.value = SpeechState.Listening
-        
-        if (activeModel.contains("Whisper") && !isWhisperInstalled) {
-            // Whisper mock for now since it's "downloadable"
-            startFallbackLocalInference("Whisper")
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            _speechState.value = SpeechState.Error("Microphone permission is required.")
             return
         }
 
-        if (model != null) {
-            try {
-                val recognizer = Recognizer(model, 16000.0f)
-                speechService = SpeechService(recognizer, 16000.0f)
-                speechService?.startListening(this)
-            } catch (e: Exception) {
-                Log.e("LocalSpeechEngine", "Failed to start listening", e)
-                _speechState.value = SpeechState.Error("Failed to start Vosk: ${e.message}")
-            }
-        } else {
-            _speechState.value = SpeechState.Error("Model not loaded yet")
+        if (_speechState.value is SpeechState.Listening || _speechState.value is SpeechState.Processing) {
+            return
+        }
+
+        triggerFeedback()
+        when (activeModel) {
+            SpeechModels.WHISPER_TINY -> startWhisperRecording()
+            else -> startVoskListening()
         }
     }
 
     fun stopListening() {
         triggerFeedback()
-        simulatedJob?.cancel()
+        when (activeModel) {
+            SpeechModels.WHISPER_TINY -> stopWhisperAndTranscribe()
+            else -> stopVoskListening()
+        }
+    }
+
+    fun acknowledgeResult() {
+        if (_speechState.value is SpeechState.Success || _speechState.value is SpeechState.Error) {
+            _speechState.value = SpeechState.Idle
+        }
+    }
+
+    private fun startVoskListening() {
+        if (!modelManager.isVoskInstalled()) {
+            _speechState.value = SpeechState.Error("Download the Vosk model from TakoFlow settings first.")
+            return
+        }
+
+        try {
+            if (voskModel == null) {
+                voskModel = Model(modelManager.voskModelDir.absolutePath)
+            }
+            val recognizer = Recognizer(voskModel, SAMPLE_RATE.toFloat())
+            speechService = SpeechService(recognizer, SAMPLE_RATE.toFloat()).also {
+                it.startListening(this)
+            }
+            _speechState.value = SpeechState.Listening
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not start Vosk", error)
+            _speechState.value = SpeechState.Error(error.message ?: "Could not start Vosk.")
+        }
+    }
+
+    private fun stopVoskListening() {
         try {
             speechService?.stop()
             speechService = null
-        } catch (e: Exception) {
-            Log.e("LocalSpeechEngine", "Failed to stop listening", e)
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not stop Vosk", error)
         }
         if (_speechState.value is SpeechState.Listening || _speechState.value is SpeechState.Processing) {
             _speechState.value = SpeechState.Idle
         }
     }
 
-    override fun onPartialResult(hypothesis: String?) {
-        hypothesis?.let {
-            try {
-                val partial = JSONObject(it).getString("partial")
-                if (partial.isNotBlank()) {
-                    _speechState.value = SpeechState.Processing(partial)
+    private fun startWhisperRecording() {
+        if (!modelManager.isWhisperInstalled()) {
+            _speechState.value = SpeechState.Error("Download Whisper Tiny before selecting it.")
+            return
+        }
+
+        try {
+            val minimum = AudioRecord.getMinBufferSize(
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            check(minimum > 0) { "Android could not create an audio input buffer." }
+
+            recordedPcm = ByteArrayOutputStream()
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                max(minimum * 2, 8192)
+            ).also { recorder ->
+                check(recorder.state == AudioRecord.STATE_INITIALIZED) {
+                    "Microphone initialization failed."
                 }
-            } catch (e: Exception) {
-                Log.e("LocalSpeechEngine", "Failed to parse partial result", e)
+                recorder.startRecording()
             }
+
+            _speechState.value = SpeechState.Listening
+            recordingJob = scope.launch {
+                val buffer = ShortArray(2048)
+                while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    if (read > 0) {
+                        var peak = 0
+                        for (index in 0 until read) {
+                            val sample = buffer[index].toInt()
+                            recordedPcm.write(sample and 0xFF)
+                            recordedPcm.write((sample shr 8) and 0xFF)
+                            peak = max(peak, abs(sample))
+                        }
+                        _rmsDb.value = (peak / Short.MAX_VALUE.toFloat()).coerceIn(0f, 1f)
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            releaseAudioRecord()
+            Log.e(TAG, "Could not start Whisper recording", error)
+            _speechState.value = SpeechState.Error(error.message ?: "Could not start recording.")
+        }
+    }
+
+    private fun stopWhisperAndTranscribe() {
+        if (_speechState.value !is SpeechState.Listening) return
+        _speechState.value = SpeechState.Processing("Transcribing on device…")
+
+        try {
+            audioRecord?.stop()
+        } catch (_: Exception) {
+        }
+
+        scope.launch {
+            recordingJob?.join()
+            releaseAudioRecord()
+            try {
+                val samples = pcm16ToFloat(recordedPcm.toByteArray())
+                if (samples.size < SAMPLE_RATE / 4) {
+                    _speechState.value = SpeechState.Error("Recording was too short.")
+                    return@launch
+                }
+
+                val bridge = whisperBridge ?: WhisperBridge(
+                    modelManager.whisperModelFile.absolutePath
+                ).also { whisperBridge = it }
+                val text = bridge.transcribe(samples)
+                _speechState.value = if (text.isBlank()) {
+                    SpeechState.Error("No speech was detected.")
+                } else {
+                    SpeechState.Success(formatText(text))
+                }
+            } catch (error: Exception) {
+                Log.e(TAG, "Whisper transcription failed", error)
+                _speechState.value = SpeechState.Error(error.message ?: "Whisper transcription failed.")
+            } finally {
+                _rmsDb.value = 0f
+            }
+        }
+    }
+
+    override fun onPartialResult(hypothesis: String?) {
+        parseResult(hypothesis, "partial")?.takeIf { it.isNotBlank() }?.let {
+            _speechState.value = SpeechState.Processing(it)
         }
     }
 
     override fun onResult(hypothesis: String?) {
-        hypothesis?.let {
-            try {
-                val text = JSONObject(it).getString("text")
-                if (text.isNotBlank()) {
-                    val formatted = formatText(text)
-                    _speechState.value = SpeechState.Success(formatted)
-                } else {
-                    _speechState.value = SpeechState.Idle
-                }
-            } catch (e: Exception) {
-                Log.e("LocalSpeechEngine", "Failed to parse result", e)
-            }
+        parseResult(hypothesis, "text")?.takeIf { it.isNotBlank() }?.let {
+            _speechState.value = SpeechState.Success(formatText(it))
         }
     }
 
     override fun onFinalResult(hypothesis: String?) {
-        onResult(hypothesis)
+        val text = parseResult(hypothesis, "text")
+        if (!text.isNullOrBlank()) {
+            _speechState.value = SpeechState.Success(formatText(text))
+        } else if (_speechState.value !is SpeechState.Success) {
+            _speechState.value = SpeechState.Idle
+        }
     }
 
     override fun onError(exception: Exception?) {
-        Log.e("LocalSpeechEngine", "Vosk error", exception)
-        _speechState.value = SpeechState.Error("Error: ${exception?.message}")
+        Log.e(TAG, "Vosk recognition failed", exception)
+        _speechState.value = SpeechState.Error(exception?.message ?: "Vosk recognition failed.")
     }
 
     override fun onTimeout() {
         _speechState.value = SpeechState.Idle
     }
 
+    private fun parseResult(json: String?, key: String): String? = try {
+        json?.let { JSONObject(it).optString(key) }
+    } catch (error: Exception) {
+        Log.e(TAG, "Could not parse speech result", error)
+        null
+    }
+
+    fun formatText(raw: String): String {
+        var result = raw.trim()
+        if (autoCapitalization && result.isNotEmpty()) {
+            result = result.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+            }
+        }
+        if (
+            autoPunctuation && result.isNotEmpty() &&
+            result.last() !in charArrayOf('.', '?', '!')
+        ) {
+            result += "."
+        }
+        return when (activeProfile) {
+            "work" -> result.replace("gonna", "going to").replace("wanna", "want to")
+            "notes" -> "- $result"
+            else -> result
+        }
+    }
+
     private fun triggerFeedback() {
+        if (soundFeedbackEnabled) {
+            try {
+                ToneGenerator(AudioManager.STREAM_SYSTEM, 35).apply {
+                    startTone(ToneGenerator.TONE_PROP_BEEP, 70)
+                    release()
+                }
+            } catch (_: Exception) {
+            }
+        }
+
         if (vibrationFeedbackEnabled) {
             try {
                 val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
@@ -168,58 +304,46 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                         vibrator.vibrate(40)
                     }
                 }
-            } catch (e: Exception) {
-                // Ignore vibration errors
+            } catch (_: Exception) {
             }
         }
     }
 
-    private fun startFallbackLocalInference(modelName: String) {
-        simulatedJob?.cancel()
-        simulatedJob = scope.launch {
-            _speechState.value = SpeechState.Listening
-            val startMs = System.currentTimeMillis()
-            while (System.currentTimeMillis() - startMs < 3500) {
-                _rmsDb.value = (0.3f + Math.random().toFloat() * 0.7f)
-                delay(120)
-            }
-            _speechState.value = SpeechState.Processing("Transcribing via $modelName...")
-            delay(400)
-            val phrases = when (activeProfile) {
-                "work" -> listOf("I will submit the quarterly performance report.", "Let's schedule a alignment sync.")
-                "notes" -> listOf("Call Alex about project deliverables.", "Idea for app enhancement.")
-                "creative" -> listOf("In the quiet glow of midnight.", "Voice transformed instantly.")
-                else -> listOf("Voice flow everywhere with high accuracy.", "Turning thoughts into formatted text.")
-            }
-            val rawText = phrases.random()
-            val formatted = formatText(rawText)
-            _speechState.value = SpeechState.Success(formatted)
+    private fun pcm16ToFloat(bytes: ByteArray): FloatArray {
+        val output = FloatArray(bytes.size / 2)
+        for (index in output.indices) {
+            val low = bytes[index * 2].toInt() and 0xFF
+            val high = bytes[index * 2 + 1].toInt()
+            val sample = ((high shl 8) or low).toShort()
+            output[index] = sample / 32768f
         }
+        return output
     }
 
-    fun formatText(raw: String): String {
-        var result = raw.trim()
-        if (autoCapitalization && result.isNotEmpty()) {
-            result = result.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+    private fun releaseAudioRecord() {
+        try {
+            audioRecord?.release()
+        } catch (_: Exception) {
         }
-        if (autoPunctuation && result.isNotEmpty() && !result.endsWith(".") && !result.endsWith("?") && !result.endsWith("!")) {
-            result += "."
-        }
-        return when (activeProfile) {
-            "work" -> result.replace("gonna", "going to").replace("wanna", "want to")
-            "notes" -> "- $result"
-            else -> result
-        }
+        audioRecord = null
+        recordingJob = null
     }
 
     fun destroy() {
-        simulatedJob?.cancel()
         try {
             speechService?.stop()
             speechService?.shutdown()
-            model?.close()
-        } catch (e: Exception) {
-            Log.e("LocalSpeechEngine", "Error destroying speech recognizer", e)
+        } catch (_: Exception) {
         }
+        releaseAudioRecord()
+        whisperBridge?.close()
+        whisperBridge = null
+        voskModel?.close()
+        voskModel = null
+    }
+
+    private companion object {
+        const val TAG = "LocalSpeechEngine"
+        const val SAMPLE_RATE = 16_000
     }
 }
