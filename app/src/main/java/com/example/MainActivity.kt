@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.data.TakoFlowPreferences
+import com.example.speech.SpeechModels
 import com.example.ui.components.BottomNavBar
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.EnableKeyboardStepperScreen
@@ -84,11 +85,10 @@ class MainActivity : ComponentActivity() {
                                 onCompleteSetup = {
                                     scope.launch {
                                         preferences.setSetupCompleted(true)
-                                        preferences.setInferenceModel(com.example.speech.SpeechModels.VOSK)
+                                        preferences.setInferenceModel(SpeechModels.VOSK)
                                         navController.navigate("dashboard") {
-                                            popUpTo("onboarding") { inclusive = true }
-                                            popUpTo("setup") { inclusive = true }
-                                            popUpTo("enable_keyboard") { inclusive = true }
+                                            popUpTo(navController.graph.id) { inclusive = true }
+                                            launchSingleTop = true
                                         }
                                     }
                                 }
