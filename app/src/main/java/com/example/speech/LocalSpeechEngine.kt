@@ -4,10 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.ToneGenerator
-import android.media.AudioManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,6 +85,10 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     }
 
     fun stopListening() {
+        if (_speechState.value !is SpeechState.Listening && _speechState.value !is SpeechState.Processing) {
+            return
+        }
+
         triggerFeedback()
         when (activeModel) {
             SpeechModels.WHISPER_TINY -> stopWhisperAndTranscribe()
@@ -92,8 +97,10 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     }
 
     fun acknowledgeResult() {
-        if (_speechState.value is SpeechState.Success || _speechState.value is SpeechState.Error) {
-            _speechState.value = SpeechState.Idle
+        _speechState.value = when (_speechState.value) {
+            is SpeechState.Success -> if (speechService != null) SpeechState.Listening else SpeechState.Idle
+            is SpeechState.Error -> SpeechState.Idle
+            else -> _speechState.value
         }
     }
 
@@ -104,10 +111,10 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         }
 
         try {
-            if (voskModel == null) {
-                voskModel = Model(modelManager.voskModelDir.absolutePath)
+            val loadedModel = voskModel ?: Model(modelManager.voskModelDir.absolutePath).also {
+                voskModel = it
             }
-            val recognizer = Recognizer(voskModel, SAMPLE_RATE.toFloat())
+            val recognizer = Recognizer(loadedModel, SAMPLE_RATE.toFloat())
             speechService = SpeechService(recognizer, SAMPLE_RATE.toFloat()).also {
                 it.startListening(this)
             }
@@ -119,13 +126,19 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     }
 
     private fun stopVoskListening() {
+        val activeService = speechService
+        speechService = null
         try {
-            speechService?.stop()
-            speechService = null
+            activeService?.stop()
+            _speechState.value = SpeechState.Processing("Finishing transcription…")
+            scope.launch {
+                delay(800)
+                if (_speechState.value is SpeechState.Processing) {
+                    _speechState.value = SpeechState.Idle
+                }
+            }
         } catch (error: Exception) {
             Log.e(TAG, "Could not stop Vosk", error)
-        }
-        if (_speechState.value is SpeechState.Listening || _speechState.value is SpeechState.Processing) {
             _speechState.value = SpeechState.Idle
         }
     }
@@ -233,19 +246,21 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
 
     override fun onFinalResult(hypothesis: String?) {
         val text = parseResult(hypothesis, "text")
-        if (!text.isNullOrBlank()) {
-            _speechState.value = SpeechState.Success(formatText(text))
-        } else if (_speechState.value !is SpeechState.Success) {
-            _speechState.value = SpeechState.Idle
+        _speechState.value = if (!text.isNullOrBlank()) {
+            SpeechState.Success(formatText(text))
+        } else {
+            SpeechState.Idle
         }
     }
 
     override fun onError(exception: Exception?) {
+        speechService = null
         Log.e(TAG, "Vosk recognition failed", exception)
         _speechState.value = SpeechState.Error(exception?.message ?: "Vosk recognition failed.")
     }
 
     override fun onTimeout() {
+        speechService = null
         _speechState.value = SpeechState.Idle
     }
 
@@ -279,9 +294,11 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     private fun triggerFeedback() {
         if (soundFeedbackEnabled) {
             try {
-                ToneGenerator(AudioManager.STREAM_SYSTEM, 35).apply {
-                    startTone(ToneGenerator.TONE_PROP_BEEP, 70)
-                    release()
+                val tone = ToneGenerator(AudioManager.STREAM_SYSTEM, 35)
+                tone.startTone(ToneGenerator.TONE_PROP_BEEP, 70)
+                scope.launch {
+                    delay(100)
+                    tone.release()
                 }
             } catch (_: Exception) {
             }
@@ -330,9 +347,11 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     }
 
     fun destroy() {
+        val service = speechService
+        speechService = null
         try {
-            speechService?.stop()
-            speechService?.shutdown()
+            service?.stop()
+            service?.shutdown()
         } catch (_: Exception) {
         }
         releaseAudioRecord()
