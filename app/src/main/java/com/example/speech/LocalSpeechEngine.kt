@@ -28,7 +28,6 @@ import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
 import org.vosk.android.SpeechService
 import java.io.ByteArrayOutputStream
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -271,25 +270,12 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         null
     }
 
-    fun formatText(raw: String): String {
-        var result = raw.trim()
-        if (autoCapitalization && result.isNotEmpty()) {
-            result = result.replaceFirstChar {
-                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-            }
-        }
-        if (
-            autoPunctuation && result.isNotEmpty() &&
-            result.last() !in charArrayOf('.', '?', '!')
-        ) {
-            result += "."
-        }
-        return when (activeProfile) {
-            "work" -> result.replace("gonna", "going to").replace("wanna", "want to")
-            "notes" -> "- $result"
-            else -> result
-        }
-    }
+    fun formatText(raw: String): String = DictationTextFormatter.format(
+        raw = raw,
+        autoCapitalization = autoCapitalization,
+        autoPunctuation = autoPunctuation,
+        profile = activeProfile
+    )
 
     private fun triggerFeedback() {
         if (soundFeedbackEnabled) {
