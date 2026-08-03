@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,19 +15,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -65,112 +59,70 @@ fun VoiceProfilesScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .clickable { onBack() },
+                    .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = OnSurfaceVariantDark
+                    tint = PrimaryAmber
                 )
             }
-
-            Text(
-                text = "Voice Profiles",
-                color = OnSurfaceDark,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Profile",
-                    tint = OnSurfaceVariantDark
-                )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Formatting profiles", color = OnSurfaceDark, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Choose how recognized text is formatted", color = OnSurfaceVariantDark, fontSize = 13.sp)
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(Modifier.height(24.dp))
 
-        // Profiles List
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ProfileCard(
-                id = "default",
                 title = "Default",
-                subtitle = "General Dictation",
+                subtitle = "Normal sentences with your punctuation settings",
                 icon = Icons.Default.Mic,
                 isActive = activeProfileId == "default",
                 onClick = { scope.launch { preferences.setActiveProfileId("default") } }
             )
-
             ProfileCard(
-                id = "work",
                 title = "Work",
-                subtitle = "Professional Tone",
+                subtitle = "Expands casual phrases such as “gonna” and “wanna”",
                 icon = Icons.Default.Work,
                 isActive = activeProfileId == "work",
                 onClick = { scope.launch { preferences.setActiveProfileId("work") } }
             )
-
             ProfileCard(
-                id = "notes",
                 title = "Notes",
-                subtitle = "Quick Thoughts",
+                subtitle = "Prefixes every completed dictation with a bullet",
                 icon = Icons.Default.EditNote,
                 isActive = activeProfileId == "notes",
                 onClick = { scope.launch { preferences.setActiveProfileId("notes") } }
             )
-
-            ProfileCard(
-                id = "creative",
-                title = "Creative",
-                subtitle = "Stories & Ideas",
-                icon = Icons.Default.AutoAwesome,
-                isActive = activeProfileId == "creative",
-                onClick = { scope.launch { preferences.setActiveProfileId("creative") } }
-            )
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
-        // Info Card
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = OnSurfaceVariantDark,
-                    modifier = Modifier.size(24.dp)
+                Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryAmber)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Profiles only format the final text. They do not upload audio or retrain either speech model.",
+                    color = OnSurfaceVariantDark,
+                    fontSize = 13.sp
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text("About Profiles", color = OnSurfaceDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Profiles help TakoFlow adapt to different contexts and styles. Customize language models, vocabulary, and punctuation per profile.",
-                        color = OnSurfaceVariantDark,
-                        fontSize = 14.sp
-                    )
-                }
             }
         }
     }
@@ -178,7 +130,6 @@ fun VoiceProfilesScreen(
 
 @Composable
 private fun ProfileCard(
-    id: String,
     title: String,
     subtitle: String,
     icon: ImageVector,
@@ -194,47 +145,28 @@ private fun ProfileCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (isActive) PrimaryAmber.copy(alpha = 0.15f) else SurfaceContainerHigh),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (isActive) PrimaryAmber else OnSurfaceVariantDark,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column {
-                    Text(title, color = OnSurfaceDark, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(subtitle, color = OnSurfaceVariantDark, fontSize = 13.sp)
-                }
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(if (isActive) PrimaryAmber.copy(alpha = 0.15f) else SurfaceContainerHigh),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = if (isActive) PrimaryAmber else OnSurfaceVariantDark
+                )
             }
-
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = OnSurfaceDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = OnSurfaceVariantDark, fontSize = 12.sp)
+            }
             if (isActive) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(PrimaryAmber.copy(alpha = 0.1f))
-                            .border(1.dp, PrimaryAmber.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text("Active", color = PrimaryAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = OnSurfaceVariantDark)
-                }
+                Text("ACTIVE", color = PrimaryAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

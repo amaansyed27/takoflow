@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -44,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,9 +57,7 @@ import com.example.ui.theme.SurfaceContainerHigh
 import com.example.ui.theme.SurfaceContainerHighest
 
 @Composable
-fun OnboardingScreen(
-    onFinishOnboarding: () -> Unit
-) {
+fun OnboardingScreen(onFinishOnboarding: () -> Unit) {
     var currentPage by remember { mutableIntStateOf(0) }
 
     Column(
@@ -71,7 +67,6 @@ fun OnboardingScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Bar Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -88,39 +83,36 @@ fun OnboardingScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = OnSurfaceVariantDark
                     )
                 }
             } else {
-                Spacer(modifier = Modifier.width(40.dp))
+                Spacer(Modifier.width(40.dp))
             }
 
             if (currentPage < 2) {
                 TextButton(onClick = onFinishOnboarding) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "SKIP",
-                            color = OnSurfaceVariantDark,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = OnSurfaceVariantDark,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Text(
+                        "SKIP",
+                        color = OnSurfaceVariantDark,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = OnSurfaceVariantDark,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             } else {
-                Spacer(modifier = Modifier.width(40.dp))
+                Spacer(Modifier.width(40.dp))
             }
         }
 
-        // Center Content Page
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -128,43 +120,36 @@ fun OnboardingScreen(
             contentAlignment = Alignment.Center
         ) {
             when (currentPage) {
-                0 -> OnboardingPage1()
-                1 -> OnboardingPage2()
-                2 -> OnboardingPage3()
+                0 -> VoiceEverywherePage()
+                1 -> LocalModelsPage()
+                else -> PrivacyPage()
             }
         }
 
-        // Page Indicators & Bottom Action
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Dots
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 24.dp)
             ) {
                 repeat(3) { index ->
-                    val isSelected = currentPage == index
                     Box(
                         modifier = Modifier
                             .height(4.dp)
-                            .width(if (isSelected) 28.dp else 8.dp)
+                            .width(if (currentPage == index) 28.dp else 8.dp)
                             .clip(CircleShape)
-                            .background(if (isSelected) PrimaryAmber else SurfaceContainerHighest)
+                            .background(
+                                if (currentPage == index) PrimaryAmber else SurfaceContainerHighest
+                            )
                     )
                 }
             }
 
-            // Next / Get Started Button
             Button(
                 onClick = {
-                    if (currentPage < 2) {
-                        currentPage++
-                    } else {
-                        onFinishOnboarding()
-                    }
+                    if (currentPage < 2) currentPage++ else onFinishOnboarding()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -175,39 +160,22 @@ fun OnboardingScreen(
                     contentColor = DarkBackground
                 )
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (currentPage == 2) "Get Started" else "Next",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Text(
+                    if (currentPage == 2) "Set up TakoFlow" else "Next",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
             }
         }
     }
 }
 
 @Composable
-fun OnboardingPage1() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Glowing Wave Icon Container
-        Box(
-            modifier = Modifier
-                .size(160.dp),
-            contentAlignment = Alignment.Center
-        ) {
+private fun VoiceEverywherePage() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(modifier = Modifier.size(160.dp), contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -215,40 +183,19 @@ fun OnboardingPage1() {
                     .background(PrimaryAmber.copy(alpha = 0.15f))
                     .blur(16.dp)
             )
-            GlassCard(
-                modifier = Modifier.size(120.dp),
-                cornerRadius = 60.dp
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+            GlassCard(modifier = Modifier.size(120.dp), cornerRadius = 60.dp) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     WaveformMeter(barCount = 5, maxHeight = 48.dp)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
+        Spacer(Modifier.height(32.dp))
+        Text("Voice typing", color = OnSurfaceDark, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Text("in any app", color = PrimaryAmber, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
         Text(
-            text = "Voice. Flow.",
-            color = OnSurfaceDark,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = "Everywhere.",
-            color = PrimaryAmber,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Experience the fastest way to turn your thoughts into text with high-accuracy voice typing.",
+            "TakoFlow is an Android keyboard with a focused voice-only mode and an optional full keyboard.",
             color = OnSurfaceVariantDark,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
@@ -258,62 +205,42 @@ fun OnboardingPage1() {
 }
 
 @Composable
-fun OnboardingPage2() {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by transition.animateFloat(
+private fun LocalModelsPage() {
+    val transition = rememberInfiniteTransition(label = "micPulse")
+    val scale by transition.animateFloat(
         initialValue = 0.95f,
-        targetValue = 1.1f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
             animation = tween(1200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulseScale"
+        label = "micScale"
     )
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier.size(180.dp),
-            contentAlignment = Alignment.Center
-        ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(modifier = Modifier.size(180.dp), contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
-                    .size(140.dp * pulseScale)
+                    .size(140.dp)
+                    .scale(scale)
                     .border(1.dp, PrimaryAmber.copy(alpha = 0.3f), CircleShape)
             )
             Box(
                 modifier = Modifier
                     .size(110.dp)
-                    .border(1.dp, PrimaryAmber.copy(alpha = 0.5f), CircleShape)
                     .clip(CircleShape)
                     .background(SurfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = null,
-                    tint = PrimaryAmber,
-                    modifier = Modifier.size(48.dp)
-                )
+                Icon(Icons.Default.Mic, contentDescription = null, tint = PrimaryAmber, modifier = Modifier.size(48.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
+        Spacer(Modifier.height(24.dp))
+        Text("Vosk by default", color = PrimaryAmber, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
         Text(
-            text = "Powered by Whisper",
-            color = PrimaryAmber,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "State-of-the-art AI models ensure your dictation is captured with near-perfect accuracy, even in noisy environments.",
+            "Start with lightweight streaming dictation. Download Whisper Tiny later from Settings when you prefer its transcription quality.",
             color = OnSurfaceVariantDark,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
@@ -323,61 +250,25 @@ fun OnboardingPage2() {
 }
 
 @Composable
-fun OnboardingPage3() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier.size(180.dp),
-            contentAlignment = Alignment.Center
+private fun PrivacyPage() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        GlassCard(
+            modifier = Modifier.size(140.dp),
+            cornerRadius = 70.dp,
+            activeGlow = true
         ) {
-            GlassCard(
-                modifier = Modifier.size(140.dp),
-                cornerRadius = 70.dp,
-                activeGlow = true
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    WaveformMeter(barCount = 3, maxHeight = 32.dp)
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = PrimaryAmber,
-                        modifier = Modifier.size(44.dp)
-                    )
-                    WaveformMeter(barCount = 3, maxHeight = 32.dp)
-                }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Lock, contentDescription = null, tint = PrimaryAmber, modifier = Modifier.size(48.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
+        Spacer(Modifier.height(24.dp))
+        Text("LOCAL PROCESSING", color = PrimaryAmber, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Spacer(Modifier.height(8.dp))
+        Text("Your audio stays\non your device", color = OnSurfaceDark, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(16.dp))
         Text(
-            text = "TOTAL PRIVACY",
-            color = PrimaryAmber.copy(alpha = 0.8f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Local. Private.\nSecure.",
-            color = OnSurfaceDark,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Your voice is processed locally on your device. We never store or send your audio to the cloud.",
+            "TakoFlow uses the internet only when you choose to download a speech model. Dictation itself is processed locally.",
             color = OnSurfaceVariantDark,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,

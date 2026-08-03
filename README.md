@@ -1,22 +1,51 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# TakoFlow
 
-# Run and deploy your AI Studio app
+TakoFlow is a private Android voice-typing keyboard from Dawnlight Labs.
+It is a separate product from Takokit; the shared name is branding only.
 
-This contains everything you need to run your app locally.
+## Current speech engines
 
-View your app in AI Studio: https://ai.studio/apps/08c6bae7-53f2-49e2-b7c6-a045d9899403
+- **Vosk** is the default engine. The setup flow downloads the official lightweight English model (about 40 MB) and uses it for streaming offline dictation.
+- **Whisper Tiny** is optional. It can be downloaded or removed from **Settings → Voice engine** and runs locally through `whisper.cpp` after the user stops recording.
 
-## Run Locally
+TakoFlow never substitutes sample phrases or simulated recognition results. If a model, permission, or keyboard configuration is missing, the app reports that state and directs the user to fix it.
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+## Features
 
+- Android `InputMethodService` keyboard usable in other apps
+- Voice-only layout with microphone, backspace, space and enter
+- Full QWERTY layout with voice dictation
+- Real checks for keyboard enabled/selected state
+- Runtime microphone permission flow
+- Download progress and installation checks for speech models
+- Local punctuation, capitalization and formatting profiles
+- Companion app for setup, model management and dictation testing
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
-7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+## Privacy
+
+Audio is processed on the device. Network access is used only when the user starts a model download. App data and downloaded models are excluded from Android backup.
+
+## Build
+
+Requirements:
+
+- Android Studio with JDK 17
+- Android SDK 36
+- Android NDK and CMake 3.22.1
+- An internet connection during the first native build so CMake can fetch the pinned `whisper.cpp` v1.8.1 source archive
+
+Open the repository in Android Studio, allow Gradle sync to finish, and run the `app` configuration on an ARM64 device or x86_64 emulator.
+
+The debug build does not require a keystore. Release signing is configured through:
+
+- `KEYSTORE_PATH`
+- `STORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
+
+## Model sources
+
+- Vosk: `vosk-model-small-en-us-0.15`
+- Whisper: `ggml-tiny.en.bin`
+
+The initial implementation is English-only. Additional languages should be added only with a matching downloadable model and tested engine configuration.
