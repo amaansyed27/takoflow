@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.ToneGenerator
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -46,17 +47,33 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     private val _rmsDb = MutableStateFlow(0f)
     val rmsDb: StateFlow<Float> = _rmsDb.asStateFlow()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val engineJob = SupervisorJob()
+    private val scope = CoroutineScope(engineJob + Dispatchers.IO)
     private val modelManager = SpeechModelManager.get(context)
+    private val whisperLock = Any()
 
     private var voskModel: Model? = null
     private var speechService: SpeechService? = null
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
+    private var transcriptionJob: Job? = null
+    private var whisperPreparationJob: Job? = null
     private var recordedPcm = ByteArrayOutputStream()
+
+    @Volatile
     private var whisperBridge: WhisperBridge? = null
 
+    @Volatile
+    private var destroyed = false
+
     var activeModel: String = SpeechModels.VOSK
+        set(value) {
+            field = value
+            if (value == SpeechModels.WHISPER_TINY) {
+                prepareWhisper()
+            }
+        }
+
     var activeLanguage: String = "English (US)"
     var autoPunctuation: Boolean = true
     var autoCapitalization: Boolean = true
@@ -65,6 +82,8 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     var activeProfile: String = "default"
 
     fun startListening() {
+        if (destroyed) return
+
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -118,9 +137,9 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                 it.startListening(this)
             }
             _speechState.value = SpeechState.Listening
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             Log.e(TAG, "Could not start Vosk", error)
-            _speechState.value = SpeechState.Error(error.message ?: "Could not start Vosk.")
+            _speechState.value = SpeechState.Error(nativeFailureMessage(error, "Could not start Vosk."))
         }
     }
 
@@ -136,9 +155,65 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                     _speechState.value = SpeechState.Idle
                 }
             }
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             Log.e(TAG, "Could not stop Vosk", error)
             _speechState.value = SpeechState.Idle
+        }
+    }
+
+    private fun prepareWhisper() {
+        if (destroyed || !modelManager.isWhisperInstalled()) return
+
+        synchronized(whisperLock) {
+            if (whisperBridge != null || whisperPreparationJob?.isActive == true) return
+
+            whisperPreparationJob = scope.launch {
+                val prepared = try {
+                    val started = SystemClock.elapsedRealtime()
+                    WhisperBridge(modelManager.whisperModelFile.absolutePath).also {
+                        Log.i(TAG, "Whisper model prepared in ${SystemClock.elapsedRealtime() - started} ms")
+                    }
+                } catch (error: Throwable) {
+                    Log.e(TAG, "Could not prepare Whisper", error)
+                    null
+                }
+
+                if (prepared != null) {
+                    synchronized(whisperLock) {
+                        if (destroyed || whisperBridge != null) {
+                            prepared.close()
+                        } else {
+                            whisperBridge = prepared
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun getOrCreateWhisperBridge(): WhisperBridge {
+        prepareWhisper()
+        whisperPreparationJob?.join()
+
+        synchronized(whisperLock) {
+            whisperBridge?.let { return it }
+        }
+
+        val created = WhisperBridge(modelManager.whisperModelFile.absolutePath)
+        synchronized(whisperLock) {
+            if (destroyed) {
+                created.close()
+                error("Speech engine was closed.")
+            }
+
+            val existing = whisperBridge
+            return if (existing != null) {
+                created.close()
+                existing
+            } else {
+                whisperBridge = created
+                created
+            }
         }
     }
 
@@ -147,6 +222,8 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
             _speechState.value = SpeechState.Error("Download Whisper Tiny before selecting it.")
             return
         }
+
+        prepareWhisper()
 
         try {
             val minimum = AudioRecord.getMinBufferSize(
@@ -187,10 +264,10 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                     }
                 }
             }
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             releaseAudioRecord()
             Log.e(TAG, "Could not start Whisper recording", error)
-            _speechState.value = SpeechState.Error(error.message ?: "Could not start recording.")
+            _speechState.value = SpeechState.Error(nativeFailureMessage(error, "Could not start recording."))
         }
     }
 
@@ -200,10 +277,10 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
 
         try {
             audioRecord?.stop()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
 
-        scope.launch {
+        transcriptionJob = scope.launch {
             recordingJob?.join()
             releaseAudioRecord()
             try {
@@ -213,20 +290,27 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                     return@launch
                 }
 
-                val bridge = whisperBridge ?: WhisperBridge(
-                    modelManager.whisperModelFile.absolutePath
-                ).also { whisperBridge = it }
+                val bridge = getOrCreateWhisperBridge()
+                val started = SystemClock.elapsedRealtime()
                 val text = bridge.transcribe(samples)
+                Log.i(
+                    TAG,
+                    "Whisper processed ${samples.size / SAMPLE_RATE.toFloat()} seconds in " +
+                        "${SystemClock.elapsedRealtime() - started} ms"
+                )
                 _speechState.value = if (text.isBlank()) {
                     SpeechState.Error("No speech was detected.")
                 } else {
                     SpeechState.Success(formatText(text))
                 }
-            } catch (error: Exception) {
+            } catch (error: Throwable) {
                 Log.e(TAG, "Whisper transcription failed", error)
-                _speechState.value = SpeechState.Error(error.message ?: "Whisper transcription failed.")
+                _speechState.value = SpeechState.Error(
+                    nativeFailureMessage(error, "Whisper transcription failed.")
+                )
             } finally {
                 _rmsDb.value = 0f
+                if (destroyed) closeWhisperBridge()
             }
         }
     }
@@ -286,7 +370,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                     delay(100)
                     tone.release()
                 }
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
             }
         }
 
@@ -307,7 +391,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                         vibrator.vibrate(40)
                     }
                 }
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
             }
         }
     }
@@ -323,27 +407,63 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         return output
     }
 
+    private fun nativeFailureMessage(error: Throwable, fallback: String): String {
+        val detail = error.message?.takeIf { it.isNotBlank() }
+        return detail ?: fallback
+    }
+
     private fun releaseAudioRecord() {
         try {
             audioRecord?.release()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
         audioRecord = null
         recordingJob = null
     }
 
+    private fun closeWhisperBridge() {
+        val bridge = synchronized(whisperLock) {
+            whisperBridge.also { whisperBridge = null }
+        }
+        try {
+            bridge?.close()
+        } catch (_: Throwable) {
+        }
+    }
+
     fun destroy() {
+        destroyed = true
+
         val service = speechService
         speechService = null
         try {
             service?.stop()
             service?.shutdown()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
+
+        try {
+            audioRecord?.stop()
+        } catch (_: Throwable) {
+        }
+        recordingJob?.cancel()
         releaseAudioRecord()
-        whisperBridge?.close()
-        whisperBridge = null
-        voskModel?.close()
+
+        whisperPreparationJob?.cancel()
+        if (transcriptionJob?.isActive == true) {
+            transcriptionJob?.invokeOnCompletion {
+                closeWhisperBridge()
+                engineJob.cancel()
+            }
+        } else {
+            closeWhisperBridge()
+            engineJob.cancel()
+        }
+
+        try {
+            voskModel?.close()
+        } catch (_: Throwable) {
+        }
         voskModel = null
     }
 
