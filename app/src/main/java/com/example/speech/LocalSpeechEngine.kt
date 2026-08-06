@@ -25,7 +25,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.vosk.Model
@@ -58,6 +57,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     private val modelManager = SpeechModelManager.get(context)
     private val resourceLock = Any()
     private val whisperLock = Any()
+    private val whisperInferenceLock = Any()
     private val sessionCounter = AtomicLong(0L)
 
     private var voskModel: Model? = null
@@ -172,26 +172,28 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                 val selectedModel = synchronized(resourceLock) {
                     if (!isCurrent(session)) {
                         if (existing == null) loadedModel.close()
-                        return@synchronized null
+                        null
+                    } else {
+                        voskModel ?: loadedModel.also { voskModel = it }
                     }
-                    voskModel ?: loadedModel.also { voskModel = it }
                 } ?: return@launch
 
                 currentCoroutineContext().ensureActive()
                 val recognizer = Recognizer(selectedModel, SAMPLE_RATE.toFloat())
                 val service = SpeechService(recognizer, SAMPLE_RATE.toFloat())
-
-                synchronized(resourceLock) {
+                val started = synchronized(resourceLock) {
                     if (!isCurrent(session)) {
-                        service.shutdown()
-                        return@synchronized
+                        false
+                    } else {
+                        speechService = service
+                        voskAcceptCallbacks = true
+                        voskStreaming = true
+                        service.startListening(this@LocalSpeechEngine)
+                        _speechState.value = SpeechState.Listening()
+                        true
                     }
-                    speechService = service
-                    voskAcceptCallbacks = true
-                    voskStreaming = true
-                    service.startListening(this@LocalSpeechEngine)
-                    _speechState.value = SpeechState.Listening()
                 }
+                if (!started) service.shutdown()
             } catch (_: CancellationException) {
             } catch (error: Throwable) {
                 Log.e(TAG, "Could not start Vosk", error)
@@ -365,7 +367,9 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
 
                 val bridge = getOrCreateWhisperBridge()
                 val started = SystemClock.elapsedRealtime()
-                val text = bridge.transcribe(samples)
+                val text = synchronized(whisperInferenceLock) {
+                    bridge.transcribe(samples)
+                }
                 currentCoroutineContext().ensureActive()
                 if (!isCurrent(session)) return@launch
 
@@ -389,7 +393,6 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                 }
             } finally {
                 _rmsDb.value = 0f
-                if (destroyed) closeWhisperBridge()
             }
         }
     }
@@ -437,14 +440,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     }
 
     private fun isCurrent(session: Long): Boolean =
-        !destroyed && activeSession == session && currentCoroutineContextSafe()
-
-    private fun currentCoroutineContextSafe(): Boolean =
-        try {
-            engineJob.isActive
-        } catch (_: Throwable) {
-            false
-        }
+        !destroyed && engineJob.isActive && activeSession == session
 
     private fun parseResult(json: String?, key: String): String? = try {
         json?.let { JSONObject(it).optString(key) }
@@ -545,18 +541,11 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         activeSession = sessionCounter.incrementAndGet()
         cancelListening()
         whisperPreparationJob?.cancel()
-        engineJob.cancel()
-
-        val transcription = transcriptionJob
-        if (transcription?.isActive == true) {
-            transcription.invokeOnCompletion {
-                closeWhisperBridge()
-                closeVoskModel()
-            }
-        } else {
+        engineJob.invokeOnCompletion {
             closeWhisperBridge()
             closeVoskModel()
         }
+        engineJob.cancel()
     }
 
     private companion object {
