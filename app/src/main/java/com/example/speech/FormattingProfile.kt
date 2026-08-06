@@ -114,7 +114,7 @@ class FormattingProfileStore private constructor(context: Context) {
         })
 
         put("customWords", JSONArray().apply {
-            profile.customWords.sorted().forEach(::put)
+            profile.customWords.sorted().forEach { word -> put(word) }
         })
     }
 
