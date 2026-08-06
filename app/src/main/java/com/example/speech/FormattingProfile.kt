@@ -35,6 +35,9 @@ class FormattingProfileStore private constructor(context: Context) {
         fun builtInProfile(id: String): FormattingProfile =
             builtIns.firstOrNull { it.id == id } ?: builtIns.first()
 
+        fun currentProfile(id: String): FormattingProfile =
+            instance?.getProfile(id) ?: builtInProfile(id)
+
         val builtIns: List<FormattingProfile> = listOf(
             FormattingProfile(
                 id = "default",
