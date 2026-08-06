@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.data.TakoFlowPreferences
+import com.example.speech.FormattingProfileStore
 import com.example.speech.SpeechModels
 import com.example.ui.components.BottomNavBar
 import com.example.ui.screens.DashboardScreen
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val preferences = TakoFlowPreferences(applicationContext)
+        FormattingProfileStore.get(applicationContext)
 
         setContent {
             MyApplicationTheme {
