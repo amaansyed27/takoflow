@@ -8,7 +8,7 @@ TakoFlow is a private, voice-first Android input method from Dawnlight Labs. It 
 - One-tap switching back to the previously used typing keyboard
 - Vosk as the default streaming offline engine
 - Optional Whisper Tiny through an optimized `whisper.cpp` Android JNI bridge
-- Live partial Vosk text, recording timer, waveform feedback and cancel controls
+- Live partial Vosk text, recording timer, waveform feedback and animated processing states
 - Password-field protection: voice capture is disabled for sensitive fields
 - Backspace, space and editor-aware enter/action controls
 - Real microphone, enabled-IME, selected-IME and model-installation checks
