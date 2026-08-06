@@ -47,7 +47,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.TakoFlowPreferences
-import com.example.speech.AdaptiveLanguageModel
 import com.example.speech.FormattingProfile
 import com.example.speech.FormattingProfileStore
 import com.example.ui.components.GlassCard
@@ -66,7 +65,6 @@ fun VoiceProfilesScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val profileStore = remember { FormattingProfileStore.get(context) }
-    val adaptiveModel = remember { AdaptiveLanguageModel.get(context) }
     val profiles by profileStore.profiles.collectAsState()
     val activeProfileId by preferences.activeProfileId.collectAsState(initial = "default")
     var editingProfile by remember { mutableStateOf<FormattingProfile?>(null) }
@@ -95,7 +93,7 @@ fun VoiceProfilesScreen(
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Formatting profiles", color = OnSurfaceDark, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("Formatting and vocabulary adapt per profile", color = OnSurfaceVariantDark, fontSize = 13.sp)
+                Text("Control how completed dictation is formatted", color = OnSurfaceVariantDark, fontSize = 13.sp)
             }
         }
 
@@ -113,7 +111,6 @@ fun VoiceProfilesScreen(
                         "notes" -> Icons.Default.EditNote
                         else -> Icons.Default.Mic
                     },
-                    learnedWords = adaptiveModel.learnedWordCount(profile.id),
                     isActive = activeProfileId == profile.id,
                     onSelect = { scope.launch { preferences.setActiveProfileId(profile.id) } },
                     onEdit = { editingProfile = profile }
@@ -131,8 +128,7 @@ fun VoiceProfilesScreen(
                 Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryAmber)
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "Custom words, replacements and learned typing history stay on this device. " +
-                        "Password fields are never learned.",
+                    "Custom words and replacements stay on this device and are applied to completed dictation. Audio is never uploaded.",
                     color = OnSurfaceVariantDark,
                     fontSize = 13.sp
                 )
@@ -146,7 +142,6 @@ fun VoiceProfilesScreen(
             onDismiss = { editingProfile = null },
             onReset = {
                 profileStore.reset(profile.id)
-                adaptiveModel.clearProfile(profile.id)
                 editingProfile = null
             },
             onSave = {
@@ -161,7 +156,6 @@ fun VoiceProfilesScreen(
 private fun ProfileCard(
     profile: FormattingProfile,
     icon: ImageVector,
-    learnedWords: Int,
     isActive: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit
@@ -201,7 +195,7 @@ private fun ProfileCard(
                 }
                 Text(profile.description, color = OnSurfaceVariantDark, fontSize = 12.sp)
                 Text(
-                    "${profile.customWords.size} custom · $learnedWords learned words",
+                    "${profile.customWords.size} custom words · ${profile.replacements.size} replacements",
                     color = PrimaryAmber,
                     fontSize = 11.sp
                 )
