@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.BuildConfig
 import com.example.data.TakoFlowPreferences
 import com.example.service.ImeStatus
+import com.example.speech.AdaptiveLanguageModel
 import com.example.speech.SpeechModels
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.ActiveGreen
@@ -64,10 +65,14 @@ fun GeneralSettingsScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    val adaptiveModel = remember { AdaptiveLanguageModel.get(context) }
 
     val autoStart by preferences.autoStartListening.collectAsState(initial = false)
     val keyboardMode by preferences.keyboardMode.collectAsState(initial = "Voice Only Mode")
     val model by preferences.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
+    val autoCorrect by preferences.autoCorrect.collectAsState(initial = true)
+    val predictions by preferences.wordPredictions.collectAsState(initial = true)
+    val learnHistory by preferences.learnFromTyping.collectAsState(initial = true)
 
     var imeEnabled by remember { mutableStateOf(false) }
     var imeSelected by remember { mutableStateOf(false) }
@@ -127,6 +132,24 @@ fun GeneralSettingsScreen(
                     checked = autoStart,
                     onCheckedChange = { scope.launch { preferences.setAutoStartListening(it) } }
                 )
+                SettingToggleRow(
+                    title = "Autocorrect",
+                    subtitle = "Correct typed words using local vocabulary and your profile",
+                    checked = autoCorrect,
+                    onCheckedChange = { scope.launch { preferences.setAutoCorrect(it) } }
+                )
+                SettingToggleRow(
+                    title = "Word predictions",
+                    subtitle = "Suggest the next word and complete the current word",
+                    checked = predictions,
+                    onCheckedChange = { scope.launch { preferences.setWordPredictions(it) } }
+                )
+                SettingToggleRow(
+                    title = "Learn from typing",
+                    subtitle = "Adapt locally to words and word pairs you use",
+                    checked = learnHistory,
+                    onCheckedChange = { scope.launch { preferences.setLearnFromTyping(it) } }
+                )
                 SettingClickableRow(
                     title = "Keyboard mode",
                     value = keyboardMode,
@@ -155,13 +178,21 @@ fun GeneralSettingsScreen(
         Spacer(Modifier.height(22.dp))
         SectionHeader("PRIVACY")
         GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Local processing", color = OnSurfaceDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    "TakoFlow does not upload recordings. Network access is used only for model downloads that you start.",
-                    color = OnSurfaceVariantDark,
-                    fontSize = 13.sp
+            Column {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Local processing", color = OnSurfaceDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        "Speech, custom vocabulary and learned typing history remain on this device. " +
+                            "TakoFlow disables learning and predictions in password fields.",
+                        color = OnSurfaceVariantDark,
+                        fontSize = 13.sp
+                    )
+                }
+                SettingClickableRow(
+                    title = "Learned typing data",
+                    value = "Clear local history",
+                    onClick = adaptiveModel::clearAll
                 )
             }
         }
