@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,10 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
-import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.TakoFlowPreferences
-import com.example.service.FullKeyboardModeContent
+import com.example.service.VoiceOnlyModeContent
 import com.example.speech.LocalSpeechEngine
 import com.example.speech.SpeechModels
 import com.example.speech.SpeechState
@@ -50,8 +45,6 @@ import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
 import com.example.ui.theme.OnSurfaceVariantDark
 import com.example.ui.theme.PrimaryAmber
-import com.example.ui.theme.SurfaceContainer
-import com.example.ui.theme.SurfaceContainerHigh
 import com.example.ui.theme.SurfaceContainerLow
 import com.example.ui.theme.SurfaceContainerLowest
 
@@ -72,10 +65,8 @@ fun VoiceDictationScreen(
     val sound by preferences.soundFeedback.collectAsState(initial = true)
     val vibration by preferences.vibrationFeedback.collectAsState(initial = false)
     val profileId by preferences.activeProfileId.collectAsState(initial = "default")
-    val savedKeyboardMode by preferences.keyboardMode.collectAsState(initial = "Voice Only Mode")
 
     var textInput by remember { mutableStateOf("") }
-    var keyboardMode by remember(savedKeyboardMode) { mutableStateOf(savedKeyboardMode) }
 
     LaunchedEffect(model, language, punctuation, autoCaps, sound, vibration, profileId) {
         speechEngine.activeModel = model
@@ -88,14 +79,12 @@ fun VoiceDictationScreen(
     }
 
     LaunchedEffect(speechState) {
-        when (val state = speechState) {
-            is SpeechState.Success -> {
-                textInput = listOf(textInput.trim(), state.recognizedText)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ")
-                speechEngine.acknowledgeResult()
-            }
-            else -> Unit
+        val state = speechState
+        if (state is SpeechState.Success) {
+            textInput = listOf(textInput.trim(), state.recognizedText)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+            speechEngine.acknowledgeResult()
         }
     }
 
@@ -126,7 +115,7 @@ fun VoiceDictationScreen(
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Test dictation", color = OnSurfaceDark, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(model, color = OnSurfaceVariantDark, fontSize = 12.sp)
+                Text("$model · voice-only preview", color = OnSurfaceVariantDark, fontSize = 12.sp)
             }
         }
 
@@ -158,7 +147,6 @@ fun VoiceDictationScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -190,112 +178,21 @@ fun VoiceDictationScreen(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
                 .background(SurfaceContainerLowest)
-                .padding(16.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainer)
-                            .clickable {
-                                keyboardMode = if (keyboardMode == "Voice Only Mode") {
-                                    "Full Keyboard"
-                                } else {
-                                    "Voice Only Mode"
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Keyboard, contentDescription = "Change keyboard mode", tint = PrimaryAmber)
-                    }
-                    Text(keyboardMode, color = OnSurfaceVariantDark, fontSize = 12.sp)
-                    Spacer(Modifier.size(42.dp))
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                if (keyboardMode == "Full Keyboard") {
-                    FullKeyboardModeContent(
-                        onKey = { textInput += it },
-                        onDelete = { if (textInput.isNotEmpty()) textInput = textInput.dropLast(1) },
-                        onEnter = { textInput += "\n" },
-                        onMic = {
-                            if (speechState is SpeechState.Listening) speechEngine.stopListening()
-                            else speechEngine.startListening()
-                        }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (speechState is SpeechState.Listening) PrimaryAmber
-                                else SurfaceContainerHigh
-                            )
-                            .clickable {
-                                if (speechState is SpeechState.Listening) speechEngine.stopListening()
-                                else speechEngine.startListening()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = "Dictate",
-                            tint = if (speechState is SpeechState.Listening) DarkBackground else PrimaryAmber,
-                            modifier = Modifier.size(42.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        TestKey(Modifier.width(62.dp), onClick = {
-                            if (textInput.isNotEmpty()) textInput = textInput.dropLast(1)
-                        }) {
-                            Icon(Icons.Default.Backspace, contentDescription = "Backspace", tint = OnSurfaceDark)
-                        }
-                        TestKey(Modifier.weight(1f), onClick = { textInput += " " }) {
-                            Text("Space", color = OnSurfaceVariantDark)
-                        }
-                        TestKey(Modifier.width(62.dp), onClick = { textInput += "\n" }, highlighted = true) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.KeyboardReturn,
-                                contentDescription = "Enter",
-                                tint = DarkBackground
-                            )
-                        }
-                    }
-                }
-            }
+            VoiceOnlyModeContent(
+                speechState = speechState,
+                rmsDb = rmsDb,
+                onMicClick = {
+                    if (speechState is SpeechState.Listening) speechEngine.stopListening()
+                    else speechEngine.startListening()
+                },
+                onDelete = {
+                    if (textInput.isNotEmpty()) textInput = textInput.dropLast(1)
+                },
+                onSpace = { textInput += " " },
+                onEnter = { textInput += "\n" }
+            )
         }
-    }
-}
-
-@Composable
-private fun TestKey(
-    modifier: Modifier,
-    onClick: () -> Unit,
-    highlighted: Boolean = false,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .height(50.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(if (highlighted) PrimaryAmber else SurfaceContainer)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
     }
 }
