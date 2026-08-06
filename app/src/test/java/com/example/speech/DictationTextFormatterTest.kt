@@ -44,14 +44,36 @@ class DictationTextFormatterTest {
     }
 
     @Test
-    fun notesProfileAddsBullet() {
+    fun notesProfileAddsBulletWithoutForcedPunctuation() {
         assertEquals(
-            "- Buy milk.",
+            "- Buy milk",
             DictationTextFormatter.format(
                 raw = "buy milk",
                 autoCapitalization = true,
                 autoPunctuation = true,
                 profile = "notes"
+            )
+        )
+    }
+
+    @Test
+    fun customProfileAppliesPrefixSuffixAndReplacement() {
+        val profile = FormattingProfile(
+            id = "default",
+            name = "Custom",
+            description = "",
+            prefix = "TODO:",
+            suffix = "#work",
+            replacements = mapOf("asap" to "as soon as possible")
+        )
+
+        assertEquals(
+            "TODO: Send this as soon as possible. #work",
+            DictationTextFormatter.format(
+                raw = "send this asap",
+                autoCapitalization = true,
+                autoPunctuation = true,
+                profile = profile
             )
         )
     }
