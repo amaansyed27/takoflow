@@ -10,13 +10,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.BrandMark
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
@@ -37,72 +37,60 @@ import com.example.ui.theme.PrimaryAmber
 @Composable
 fun SetupScreen(onNavigateToEnable: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground)
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxSize().background(DarkBackground)
+            .padding(horizontal = 22.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Mic, contentDescription = null, tint = PrimaryAmber)
-            Spacer(Modifier.width(8.dp))
-            Text("TakoFlow setup", color = PrimaryAmber, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        }
+        BrandMark(size = 98.dp, animated = true)
+        Text("Set up TakoFlow", color = OnSurfaceDark, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Four real checks prepare the voice keyboard for daily use.",
+            color = OnSurfaceVariantDark,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(26.dp))
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "Set up your voice keyboard",
-                color = OnSurfaceDark,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "TakoFlow handles dictation while Samsung Keyboard or Gboard remains your normal typing keyboard. After setup, we will show you how to move between them.",
-                color = OnSurfaceVariantDark,
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(Modifier.height(30.dp))
-
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SetupSummaryRow(Icons.Default.Keyboard, "Enable and select TakoFlow")
-                    SetupSummaryRow(Icons.Default.Mic, "Allow microphone access")
-                    SetupSummaryRow(Icons.Default.Lock, "Download the private offline model")
-                    SetupSummaryRow(Icons.Default.Keyboard, "Learn how to switch back for typing")
-                }
+        GlassCard(modifier = Modifier.fillMaxWidth(), activeGlow = true) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                SetupRow(Icons.Default.Keyboard, "Enable TakoFlow", "Allow the Android input method")
+                SetupRow(Icons.Default.CheckCircle, "Select TakoFlow", "Make the voice panel current")
+                SetupRow(Icons.Default.Mic, "Allow microphone", "Only used while dictating")
+                SetupRow(Icons.Default.Storage, "Install Vosk", "Download the default offline model")
             }
         }
 
+        Spacer(Modifier.weight(1f))
+        Text(
+            "You can switch back to Samsung Keyboard or Gboard from inside TakoFlow.",
+            color = OnSurfaceVariantDark,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(14.dp))
         Button(
             onClick = onNavigateToEnable,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = PrimaryAmber,
-                contentColor = DarkBackground
-            )
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(15.dp),
+            colors = ButtonDefaults.buttonColors(PrimaryAmber, DarkBackground)
         ) {
-            Text("Start setup", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(8.dp))
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+            Text("Start checks", fontSize = 17.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun SetupSummaryRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String
-) {
+private fun SetupRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = PrimaryAmber, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(text, color = OnSurfaceDark, fontSize = 14.sp)
+        Icon(icon, null, tint = PrimaryAmber, modifier = Modifier.size(25.dp))
+        Spacer(Modifier.size(14.dp))
+        Column {
+            Text(title, color = OnSurfaceDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = OnSurfaceVariantDark, fontSize = 12.sp)
+        }
     }
 }

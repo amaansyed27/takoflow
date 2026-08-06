@@ -1,29 +1,32 @@
 # TakoFlow
 
-TakoFlow is a private Android voice-typing keyboard from Dawnlight Labs.
-It is a separate product from Takokit; the shared name is branding only.
+TakoFlow is a private, voice-first Android input method from Dawnlight Labs. It handles local dictation while Samsung Keyboard, Gboard or another installed keyboard remains available for normal typing.
 
-## Current speech engines
+## What works
 
-- **Vosk** is the default engine. The setup flow downloads the official lightweight English model (about 40 MB) and uses it for streaming offline dictation.
-- **Whisper Tiny** is optional. It can be downloaded or removed from **Settings → Voice engine** and runs locally through `whisper.cpp` after the user stops recording.
+- Real Android `InputMethodService` usable in other apps
+- One-tap switching back to the previously used typing keyboard
+- Vosk as the default streaming offline engine
+- Optional Whisper Tiny through an optimized `whisper.cpp` Android JNI bridge
+- Live partial Vosk text, recording timer, waveform feedback and animated processing states
+- Password-field protection: voice capture is disabled for sensitive fields
+- Backspace, space and editor-aware enter/action controls
+- Real microphone, enabled-IME, selected-IME and model-installation checks
+- Resumable user flow for setup, permission repair and keyboard switching guidance
+- Download, progress, cancellation, validation and removal for local speech models
+- Editable formatting profiles with phrase replacements, preferred spellings, prefixes, suffixes, bullets, capitalization and punctuation
+- Companion app dictation testing with copy, share and clear actions
+- Local-only speech processing; network access is used only for user-initiated model downloads
 
-TakoFlow never substitutes sample phrases or simulated recognition results. If a model, permission, or keyboard configuration is missing, the app reports that state and directs the user to fix it.
+## Speech engines
 
-## Features
+### Vosk
 
-- Android `InputMethodService` keyboard usable in other apps
-- Voice-only layout with microphone, backspace, space and enter
-- Full QWERTY layout with voice dictation
-- Real checks for keyboard enabled/selected state
-- Runtime microphone permission flow
-- Download progress and installation checks for speech models
-- Local punctuation, capitalization and formatting profiles
-- Companion app for setup, model management and dictation testing
+The setup flow downloads `vosk-model-small-en-us-0.15` and uses it for low-latency streaming English dictation.
 
-## Privacy
+### Whisper Tiny
 
-Audio is processed on the device. Network access is used only when the user starts a model download. App data and downloaded models are excluded from Android backup.
+Whisper Tiny downloads `ggml-tiny.en.bin` and runs locally through the pinned `whisper.cpp` native build. The model is prepared while recording and uses mobile-oriented low-latency decoding settings.
 
 ## Build
 
@@ -31,21 +34,25 @@ Requirements:
 
 - Android Studio with JDK 17
 - Android SDK 36
-- Android NDK and CMake 3.22.1
-- An internet connection during the first native build so CMake can fetch the pinned `whisper.cpp` v1.8.1 source archive
+- Android NDK `28.2.13676358`
+- CMake `3.22.1`
+- Internet access during the first native build so CMake can fetch the pinned `whisper.cpp` source
 
-Open the repository in Android Studio, allow Gradle sync to finish, and run the `app` configuration on an ARM64 device or x86_64 emulator.
+Build and install on a connected device:
 
-The debug build does not require a keystore. Release signing is configured through:
+```powershell
+.\gradlew.bat :app:installDebug --no-daemon
+```
+
+The supported native ABIs are `arm64-v8a` and `x86_64`.
+
+Release signing uses:
 
 - `KEYSTORE_PATH`
 - `STORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-## Model sources
+## Privacy
 
-- Vosk: `vosk-model-small-en-us-0.15`
-- Whisper: `ggml-tiny.en.bin`
-
-The initial implementation is English-only. Additional languages should be added only with a matching downloadable model and tested engine configuration.
+Downloaded models, formatting rules and audio processing remain inside the app sandbox. TakoFlow excludes app data from Android backup and does not enable voice capture in password fields.

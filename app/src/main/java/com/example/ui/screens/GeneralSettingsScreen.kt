@@ -1,9 +1,10 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,22 +12,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,24 +32,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.BuildConfig
 import com.example.data.TakoFlowPreferences
 import com.example.service.ImeStatus
 import com.example.speech.SpeechModels
+import com.example.ui.components.BrandHeader
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.ActiveGreen
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
 import com.example.ui.theme.OnSurfaceVariantDark
 import com.example.ui.theme.PrimaryAmber
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -60,210 +55,140 @@ fun GeneralSettingsScreen(
     preferences: TakoFlowPreferences,
     onBack: () -> Unit,
     onNavigateToVoiceSettings: () -> Unit,
-    onNavigateToSwitchingGuide: () -> Unit
+    onNavigateToSwitchingGuide: () -> Unit,
+    onRunSetupAgain: () -> Unit
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-
     val autoStart by preferences.autoStartListening.collectAsState(initial = false)
     val model by preferences.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
-
+    val sound by preferences.soundFeedback.collectAsState(initial = true)
+    val vibration by preferences.vibrationFeedback.collectAsState(initial = false)
     var imeEnabled by remember { mutableStateOf(false) }
     var imeSelected by remember { mutableStateOf(false) }
 
-    fun refresh() {
-        imeEnabled = ImeStatus.isEnabled(context)
-        imeSelected = ImeStatus.isSelected(context)
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) refresh()
+    LaunchedEffect(Unit) {
+        while (true) {
+            imeEnabled = ImeStatus.isEnabled(context)
+            imeSelected = ImeStatus.isSelected(context)
+            delay(1_000)
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        refresh()
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground)
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+        modifier = Modifier.fillMaxSize().background(DarkBackground)
             .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onBack),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryAmber)
-            }
-            Spacer(Modifier.width(12.dp))
-            Text("Settings", color = OnSurfaceDark, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        }
+        BrandHeader("Settings", "System, voice and feedback", onBack = onBack)
+        Spacer(Modifier.height(22.dp))
 
-        Spacer(Modifier.height(24.dp))
-        SectionHeader("SYSTEM")
+        SectionLabel("SYSTEM")
         GlassCard(modifier = Modifier.fillMaxWidth(), activeGlow = imeEnabled && imeSelected) {
             Column(modifier = Modifier.padding(16.dp)) {
-                StatusRow("TakoFlow keyboard enabled", imeEnabled)
+                SettingStatus("TakoFlow enabled", imeEnabled)
+                SettingStatus("TakoFlow selected", imeSelected)
                 Spacer(Modifier.height(8.dp))
-                StatusRow("TakoFlow selected", imeSelected)
+                SettingAction("Open Android keyboard settings", "Manage enabled keyboards") {
+                    context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                }
             }
         }
 
-        Spacer(Modifier.height(22.dp))
-        SectionHeader("VOICE KEYBOARD")
+        Spacer(Modifier.height(20.dp))
+        SectionLabel("VOICE PANEL")
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column {
-                SettingToggleRow(
-                    title = "Start listening when opened",
-                    subtitle = "Begin dictation when the TakoFlow voice panel appears",
-                    checked = autoStart,
-                    onCheckedChange = { scope.launch { preferences.setAutoStartListening(it) } }
-                )
-                SettingClickableRow(
-                    title = "Switching keyboards",
-                    value = "Use Samsung Keyboard or Gboard for normal typing",
-                    onClick = onNavigateToSwitchingGuide
-                )
+                ToggleSetting(
+                    "Start listening when opened",
+                    "Begin dictation as soon as TakoFlow appears",
+                    autoStart
+                ) { scope.launch { preferences.setAutoStartListening(it) } }
+                ToggleSetting("Sound feedback", "Play a short start and stop tone", sound) {
+                    scope.launch { preferences.setSoundFeedback(it) }
+                }
+                ToggleSetting("Vibration feedback", "Use a short haptic pulse", vibration) {
+                    scope.launch { preferences.setVibrationFeedback(it) }
+                }
+                SettingAction("Voice engine", model, onNavigateToVoiceSettings)
             }
         }
 
-        Spacer(Modifier.height(22.dp))
-        SectionHeader("VOICE ENGINE")
+        Spacer(Modifier.height(20.dp))
+        SectionLabel("HELP")
         GlassCard(modifier = Modifier.fillMaxWidth()) {
-            SettingClickableRow(
-                title = "Inference model",
-                value = model,
-                onClick = onNavigateToVoiceSettings
-            )
+            Column {
+                SettingAction("Switching keyboards", "Learn the TakoFlow ↔ keyboard flow", onNavigateToSwitchingGuide, Icons.Default.SwapHoriz)
+                SettingAction("Run setup again", "Recheck permissions, keyboard and model", onRunSetupAgain, Icons.Default.Refresh)
+            }
         }
 
-        Spacer(Modifier.height(22.dp))
-        SectionHeader("PRIVACY")
+        Spacer(Modifier.height(20.dp))
+        SectionLabel("ABOUT")
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Local processing", color = OnSurfaceDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(5.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Version", color = OnSurfaceDark)
+                    Text(BuildConfig.VERSION_NAME, color = PrimaryAmber)
+                }
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    "Speech, recordings and formatting-profile vocabulary remain on this device. " +
-                        "Network access is used only for model downloads that you start.",
+                    "Speech is processed locally. Network access is used only for model downloads you start.",
                     color = OnSurfaceVariantDark,
-                    fontSize = 13.sp
+                    fontSize = 12.sp
                 )
             }
         }
-
-        Spacer(Modifier.height(22.dp))
-        SectionHeader("ABOUT")
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Version", color = OnSurfaceDark, fontSize = 16.sp)
-                Text(BuildConfig.VERSION_NAME, color = OnSurfaceVariantDark, fontSize = 14.sp)
-            }
-        }
-
         Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun StatusRow(label: String, complete: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun SectionLabel(text: String) {
+    Text(text, color = OnSurfaceVariantDark, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.padding(start = 3.dp, bottom = 8.dp))
+}
+
+@Composable
+private fun SettingStatus(label: String, ready: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = OnSurfaceDark, fontSize = 14.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                if (complete) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
-                contentDescription = null,
-                tint = if (complete) ActiveGreen else PrimaryAmber,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(5.dp))
-            Text(
-                if (complete) "Ready" else "Required",
-                color = if (complete) ActiveGreen else PrimaryAmber,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        Text(if (ready) "READY" else "REQUIRED", color = if (ready) ActiveGreen else PrimaryAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text,
-        color = OnSurfaceVariantDark,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 1.5.sp,
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-    )
-}
-
-@Composable
-private fun SettingToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
+private fun ToggleSetting(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        Modifier.fillMaxWidth().padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = OnSurfaceDark, fontSize = 15.sp)
             Text(subtitle, color = OnSurfaceVariantDark, fontSize = 12.sp)
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = DarkBackground,
-                checkedTrackColor = PrimaryAmber
-            )
-        )
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
 @Composable
-private fun SettingClickableRow(
+private fun SettingAction(
     title: String,
-    value: String,
-    onClick: () -> Unit
+    subtitle: String,
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (icon != null) {
+            Icon(icon, null, tint = PrimaryAmber)
+            Spacer(Modifier.padding(5.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = OnSurfaceDark, fontSize = 15.sp)
-            Text(value, color = PrimaryAmber, fontSize = 12.sp)
+            Text(subtitle, color = OnSurfaceVariantDark, fontSize = 12.sp)
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = OnSurfaceVariantDark)
+        Icon(Icons.Default.ChevronRight, null, tint = OnSurfaceVariantDark)
     }
 }

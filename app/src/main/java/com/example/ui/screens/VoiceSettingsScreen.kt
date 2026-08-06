@@ -1,9 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,24 +9,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,12 +41,16 @@ import com.example.data.TakoFlowPreferences
 import com.example.speech.ModelDownloadState
 import com.example.speech.SpeechModelManager
 import com.example.speech.SpeechModels
+import com.example.ui.components.BrandHeader
 import com.example.ui.components.GlassCard
+import com.example.ui.theme.ActiveGreen
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
 import com.example.ui.theme.OnSurfaceVariantDark
 import com.example.ui.theme.PrimaryAmber
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @Composable
 fun VoiceSettingsScreen(
@@ -62,137 +60,74 @@ fun VoiceSettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val manager = remember { SpeechModelManager.get(context) }
-
+    val vosk by manager.voskState.collectAsState()
+    val whisper by manager.whisperState.collectAsState()
     val selectedModel by preferences.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
     val punctuation by preferences.punctuation.collectAsState(initial = true)
-    val autoCaps by preferences.autoCapitalization.collectAsState(initial = true)
-    val sound by preferences.soundFeedback.collectAsState(initial = true)
-    val vibration by preferences.vibrationFeedback.collectAsState(initial = false)
-    val voskState by manager.voskState.collectAsState()
-    val whisperState by manager.whisperState.collectAsState()
+    val caps by preferences.autoCapitalization.collectAsState(initial = true)
 
     LaunchedEffect(Unit) {
-        manager.refresh()
-        if (selectedModel == SpeechModels.WHISPER_TINY && !manager.isWhisperInstalled()) {
-            preferences.setInferenceModel(SpeechModels.VOSK)
+        while (true) {
+            manager.refresh()
+            delay(1_000)
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground)
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+        modifier = Modifier.fillMaxSize().background(DarkBackground)
             .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onBack),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = PrimaryAmber
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Voice engine", color = OnSurfaceDark, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("Offline models stored on this device", color = OnSurfaceVariantDark, fontSize = 13.sp)
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
+        BrandHeader("Voice engine", "Choose and manage on-device models", onBack = onBack)
+        Spacer(Modifier.height(22.dp))
 
         ModelCard(
-            title = "Vosk",
-            subtitle = "Fast streaming dictation · about 40 MB",
-            state = voskState,
+            title = "Vosk Small English",
+            subtitle = "Default · streaming · low latency · about 40 MB",
+            state = vosk,
             selected = selectedModel == SpeechModels.VOSK,
-            canDelete = false,
-            onDownload = manager::downloadVosk,
             onSelect = { scope.launch { preferences.setInferenceModel(SpeechModels.VOSK) } },
-            onDelete = {}
+            onDownload = manager::downloadVosk,
+            onCancel = manager::cancelVoskDownload,
+            onDelete = manager::deleteVosk
         )
-
-        Spacer(Modifier.height(14.dp))
-
+        Spacer(Modifier.height(12.dp))
         ModelCard(
-            title = "Whisper Tiny",
-            subtitle = "Higher accuracy · about 75 MB · transcribes after recording",
-            state = whisperState,
+            title = "Whisper Tiny English",
+            subtitle = "Optional · higher accuracy · processes after recording · about 75 MB",
+            state = whisper,
             selected = selectedModel == SpeechModels.WHISPER_TINY,
-            canDelete = whisperState.installed,
-            onDownload = manager::downloadWhisper,
             onSelect = { scope.launch { preferences.setInferenceModel(SpeechModels.WHISPER_TINY) } },
-            onDelete = {
-                scope.launch {
-                    if (selectedModel == SpeechModels.WHISPER_TINY) {
-                        preferences.setInferenceModel(SpeechModels.VOSK)
-                    }
-                    manager.deleteWhisper()
-                }
-            }
+            onDownload = manager::downloadWhisper,
+            onCancel = manager::cancelWhisperDownload,
+            onDelete = manager::deleteWhisper
         )
 
-        Spacer(Modifier.height(28.dp))
-        SectionLabel("DICTATION")
+        Spacer(Modifier.height(22.dp))
+        Text("TEXT FORMATTING", color = OnSurfaceVariantDark, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Spacer(Modifier.height(8.dp))
         GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                ToggleRow(
-                    title = "Automatic punctuation",
-                    subtitle = "Add sentence-ending punctuation",
-                    checked = punctuation,
-                    onChange = { scope.launch { preferences.setPunctuation(it) } }
-                )
-                ToggleRow(
-                    title = "Automatic capitalization",
-                    subtitle = "Capitalize the first word",
-                    checked = autoCaps,
-                    onChange = { scope.launch { preferences.setAutoCapitalization(it) } }
-                )
-                ToggleRow(
-                    title = "Sound feedback",
-                    subtitle = "Play a tone when listening starts or stops",
-                    checked = sound,
-                    onChange = { scope.launch { preferences.setSoundFeedback(it) } }
-                )
-                ToggleRow(
-                    title = "Vibration feedback",
-                    subtitle = "Vibrate when listening starts or stops",
-                    checked = vibration,
-                    onChange = { scope.launch { preferences.setVibrationFeedback(it) } }
-                )
+            Column {
+                VoiceToggle(
+                    "Automatic punctuation",
+                    "Add sentence-ending punctuation when a profile allows it",
+                    punctuation
+                ) { scope.launch { preferences.setPunctuation(it) } }
+                VoiceToggle(
+                    "Automatic capitalization",
+                    "Capitalize the beginning of completed dictation",
+                    caps
+                ) { scope.launch { preferences.setAutoCapitalization(it) } }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Icon(Icons.Default.Lock, contentDescription = null, tint = PrimaryAmber)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Private by default", color = OnSurfaceDark, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Audio is processed locally. Internet access is used only when you explicitly download a model.",
-                        color = OnSurfaceVariantDark,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-        }
-
+        Spacer(Modifier.height(18.dp))
+        Text(
+            "Both engines run locally. Whisper can take longer because it processes the complete recording after you stop.",
+            color = OnSurfaceVariantDark,
+            fontSize = 12.sp,
+            lineHeight = 18.sp
+        )
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -203,32 +138,26 @@ private fun ModelCard(
     subtitle: String,
     state: ModelDownloadState,
     selected: Boolean,
-    canDelete: Boolean,
-    onDownload: () -> Unit,
     onSelect: () -> Unit,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
     onDelete: () -> Unit
 ) {
     GlassCard(modifier = Modifier.fillMaxWidth(), activeGlow = selected) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Column(modifier = Modifier.padding(17.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (state.installed) Icons.Default.Memory else Icons.Default.CloudDownload,
+                    null,
+                    tint = if (state.installed) ActiveGreen else PrimaryAmber
+                )
+                Spacer(Modifier.padding(6.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(title, color = OnSurfaceDark, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        if (selected) {
-                            Spacer(Modifier.width(8.dp))
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = "Selected",
-                                tint = PrimaryAmber,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    Text(subtitle, color = OnSurfaceVariantDark, fontSize = 13.sp)
+                    Text(title, color = OnSurfaceDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(subtitle, color = OnSurfaceVariantDark, fontSize = 12.sp, lineHeight = 17.sp)
+                }
+                if (selected) {
+                    Text("ACTIVE", color = PrimaryAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -239,7 +168,17 @@ private fun ModelCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(6.dp))
-                Text("Downloading ${state.progressPercent}%", color = OnSurfaceVariantDark, fontSize = 12.sp)
+                Text(
+                    buildString {
+                        append("${state.progressPercent}%")
+                        if (state.downloadedBytes > 0) {
+                            append(" · ${formatBytes(state.downloadedBytes)}")
+                            if (state.totalBytes > 0) append(" / ${formatBytes(state.totalBytes)}")
+                        }
+                    },
+                    color = OnSurfaceVariantDark,
+                    fontSize = 11.sp
+                )
             }
 
             state.error?.let {
@@ -248,44 +187,46 @@ private fun ModelCard(
             }
 
             Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 when {
-                    !state.installed -> Button(
-                        onClick = onDownload,
-                        enabled = !state.downloading,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryAmber,
-                            contentColor = DarkBackground
-                        )
-                    ) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (state.downloading) "Downloading" else "Download")
+                    state.downloading -> {
+                        OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Default.StopCircle, null)
+                            Spacer(Modifier.padding(3.dp))
+                            Text("Cancel")
+                        }
                     }
-
-                    !selected -> Button(
-                        onClick = onSelect,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryAmber,
-                            contentColor = DarkBackground
-                        )
-                    ) {
-                        Text("Use model")
+                    !state.installed -> {
+                        Button(
+                            onClick = onDownload,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(PrimaryAmber, DarkBackground)
+                        ) {
+                            Text(if (state.error == null) "Download" else "Retry", fontWeight = FontWeight.Bold)
+                        }
                     }
-
-                    else -> Text(
-                        "Currently active",
-                        color = PrimaryAmber,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp)
-                    )
-                }
-
-                if (canDelete && state.installed) {
-                    OutlinedButton(onClick = onDelete, enabled = !state.downloading) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Remove")
+                    !selected -> {
+                        Button(
+                            onClick = onSelect,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(PrimaryAmber, DarkBackground)
+                        ) {
+                            Icon(Icons.Default.CheckCircle, null)
+                            Spacer(Modifier.padding(3.dp))
+                            Text("Use model", fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(onClick = onDelete) {
+                            Icon(Icons.Default.Delete, "Delete model")
+                        }
+                    }
+                    else -> {
+                        Text(
+                            "Selected and ready",
+                            color = ActiveGreen,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
                     }
                 }
             }
@@ -294,42 +235,21 @@ private fun ModelCard(
 }
 
 @Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit
-) {
+private fun VoiceToggle(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = OnSurfaceDark, fontSize = 15.sp)
             Text(subtitle, color = OnSurfaceVariantDark, fontSize = 12.sp)
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = DarkBackground,
-                checkedTrackColor = PrimaryAmber
-            )
-        )
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        color = OnSurfaceVariantDark,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 1.5.sp,
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-    )
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val mb = bytes / (1024.0 * 1024.0)
+    return String.format(Locale.US, "%.1f MB", mb)
 }

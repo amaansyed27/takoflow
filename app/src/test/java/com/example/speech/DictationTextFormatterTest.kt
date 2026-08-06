@@ -12,65 +12,69 @@ class DictationTextFormatterTest {
                 raw = "hello world",
                 autoCapitalization = true,
                 autoPunctuation = true,
-                profile = "default"
+                profile = FormattingProfileStore.builtInProfile("default")
             )
         )
     }
 
     @Test
-    fun existingPunctuationIsPreserved() {
-        assertEquals(
-            "Already done!",
-            DictationTextFormatter.format(
-                raw = "already done!",
-                autoCapitalization = true,
-                autoPunctuation = true,
-                profile = "default"
-            )
-        )
-    }
-
-    @Test
-    fun workProfileExpandsCasualPhrasesBeforeCapitalization() {
+    fun workProfileAppliesRealPhraseReplacements() {
         assertEquals(
             "Going to send it because I want to finish.",
             DictationTextFormatter.format(
                 raw = "gonna send it because I wanna finish",
                 autoCapitalization = true,
                 autoPunctuation = true,
-                profile = "work"
+                profile = FormattingProfileStore.builtInProfile("work")
             )
         )
     }
 
     @Test
-    fun notesProfileAddsBulletWithoutForcedPunctuation() {
+    fun notesProfileUsesBulletWithoutForcedPunctuation() {
         assertEquals(
-            "- Buy milk",
+            "• Buy milk",
             DictationTextFormatter.format(
                 raw = "buy milk",
                 autoCapitalization = true,
                 autoPunctuation = true,
-                profile = "notes"
+                profile = FormattingProfileStore.builtInProfile("notes")
             )
         )
     }
 
     @Test
-    fun customProfileAppliesPrefixSuffixAndReplacement() {
+    fun preferredSpellingsCorrectCloseRecognitionResults() {
         val profile = FormattingProfile(
-            id = "default",
-            name = "Custom",
+            id = "test",
+            name = "Test",
             description = "",
-            prefix = "TODO:",
-            suffix = "#work",
-            replacements = mapOf("asap" to "as soon as possible")
+            customWords = setOf("TakoFlow")
         )
-
         assertEquals(
-            "TODO: Send this as soon as possible. #work",
+            "Open TakoFlow.",
             DictationTextFormatter.format(
-                raw = "send this asap",
+                raw = "open takoflo",
+                autoCapitalization = true,
+                autoPunctuation = true,
+                profile = profile
+            )
+        )
+    }
+
+    @Test
+    fun prefixAndSuffixArePersistedFormattingRules() {
+        val profile = FormattingProfile(
+            id = "test",
+            name = "Test",
+            description = "",
+            prefix = "Note:",
+            suffix = "— sent locally"
+        )
+        assertEquals(
+            "Note: Review complete. — sent locally",
+            DictationTextFormatter.format(
+                raw = "review complete",
                 autoCapitalization = true,
                 autoPunctuation = true,
                 profile = profile

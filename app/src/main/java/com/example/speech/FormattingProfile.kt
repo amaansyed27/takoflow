@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 data class FormattingProfile(
     val id: String,
@@ -23,31 +24,43 @@ data class FormattingProfile(
 class FormattingProfileStore private constructor(context: Context) {
     companion object {
         private const val PREFS_NAME = "takoflow_formatting_profiles"
+        private const val CUSTOM_IDS_KEY = "custom_profile_ids"
+        private const val MAX_CUSTOM_PROFILES = 12
+        private const val MAX_CUSTOM_WORDS = 200
+        private const val MAX_REPLACEMENTS = 100
 
         @Volatile
         private var instance: FormattingProfileStore? = null
 
+        @Volatile
+        private var currentInstance: FormattingProfileStore? = null
+
         fun get(context: Context): FormattingProfileStore =
             instance ?: synchronized(this) {
-                instance ?: FormattingProfileStore(context.applicationContext).also { instance = it }
+                instance ?: FormattingProfileStore(context.applicationContext).also {
+                    instance = it
+                    currentInstance = it
+                }
             }
+
+        fun currentProfile(id: String): FormattingProfile =
+            currentInstance?.getProfile(id) ?: builtInProfile(id)
 
         fun builtInProfile(id: String): FormattingProfile =
             builtIns.firstOrNull { it.id == id } ?: builtIns.first()
 
-        fun currentProfile(id: String): FormattingProfile =
-            instance?.getProfile(id) ?: builtInProfile(id)
+        fun isBuiltIn(id: String): Boolean = builtIns.any { it.id == id }
 
         val builtIns: List<FormattingProfile> = listOf(
             FormattingProfile(
                 id = "default",
                 name = "Default",
-                description = "Natural sentences using your global punctuation settings"
+                description = "Natural sentences for everyday dictation"
             ),
             FormattingProfile(
                 id = "work",
                 name = "Work",
-                description = "More formal wording for messages, reports and email",
+                description = "More formal wording for messages and reports",
                 replacements = linkedMapOf(
                     "gonna" to "going to",
                     "wanna" to "want to",
@@ -59,7 +72,7 @@ class FormattingProfileStore private constructor(context: Context) {
             FormattingProfile(
                 id = "notes",
                 name = "Notes",
-                description = "Fast bullet-style notes without forced sentence punctuation",
+                description = "Fast bullet-style notes without forced punctuation",
                 bulletPrefix = true,
                 addPunctuation = false
             )
@@ -70,32 +83,134 @@ class FormattingProfileStore private constructor(context: Context) {
     private val _profiles = MutableStateFlow(loadAll())
     val profiles: StateFlow<List<FormattingProfile>> = _profiles.asStateFlow()
 
+    init {
+        currentInstance = this
+    }
+
     fun getProfile(id: String): FormattingProfile =
         _profiles.value.firstOrNull { it.id == id } ?: builtInProfile(id)
 
+    fun createProfile(): FormattingProfile {
+        val customCount = _profiles.value.count { !isBuiltIn(it.id) }
+        require(customCount < MAX_CUSTOM_PROFILES) {
+            "You can create up to $MAX_CUSTOM_PROFILES custom profiles."
+        }
+
+        val profile = FormattingProfile(
+            id = "custom-${UUID.randomUUID()}",
+            name = "Custom profile",
+            description = "Your own formatting rules"
+        )
+        save(profile)
+        return profile
+    }
+
     fun save(profile: FormattingProfile) {
-        require(profile.id in builtIns.map { it.id }) { "Unknown profile id: ${profile.id}" }
+        val sanitized = sanitize(profile)
         preferences.edit()
-            .putString(profileKey(profile.id), encode(profile).toString())
+            .putString(profileKey(sanitized.id), encode(sanitized).toString())
             .apply()
+
+        if (!isBuiltIn(sanitized.id)) {
+            val customIds = readCustomIds().toMutableList()
+            if (sanitized.id !in customIds) {
+                require(customIds.size < MAX_CUSTOM_PROFILES) {
+                    "You can create up to $MAX_CUSTOM_PROFILES custom profiles."
+                }
+                customIds += sanitized.id
+                writeCustomIds(customIds)
+            }
+        }
         _profiles.value = loadAll()
     }
 
     fun reset(profileId: String) {
-        preferences.edit().remove(profileKey(profileId)).apply()
-        _profiles.value = loadAll()
-    }
-
-    private fun loadAll(): List<FormattingProfile> = builtIns.map { builtIn ->
-        val stored = preferences.getString(profileKey(builtIn.id), null)
-        if (stored.isNullOrBlank()) {
-            builtIn
-        } else {
-            runCatching { decode(JSONObject(stored), builtIn) }.getOrDefault(builtIn)
+        if (isBuiltIn(profileId)) {
+            preferences.edit().remove(profileKey(profileId)).apply()
+            _profiles.value = loadAll()
         }
     }
 
+    fun delete(profileId: String): Boolean {
+        if (isBuiltIn(profileId)) return false
+        val customIds = readCustomIds().filterNot { it == profileId }
+        preferences.edit()
+            .remove(profileKey(profileId))
+            .putString(CUSTOM_IDS_KEY, JSONArray(customIds).toString())
+            .apply()
+        _profiles.value = loadAll()
+        return true
+    }
+
+    private fun loadAll(): List<FormattingProfile> {
+        val builtInProfiles = builtIns.map { fallback ->
+            loadProfile(fallback.id, fallback)
+        }
+        val customProfiles = readCustomIds().mapNotNull { id ->
+            val raw = preferences.getString(profileKey(id), null) ?: return@mapNotNull null
+            runCatching {
+                decode(
+                    JSONObject(raw),
+                    FormattingProfile(
+                        id = id,
+                        name = "Custom profile",
+                        description = "Your own formatting rules"
+                    )
+                )
+            }.getOrNull()
+        }
+        return builtInProfiles + customProfiles
+    }
+
+    private fun loadProfile(id: String, fallback: FormattingProfile): FormattingProfile {
+        val stored = preferences.getString(profileKey(id), null)
+        return if (stored.isNullOrBlank()) {
+            fallback
+        } else {
+            runCatching { decode(JSONObject(stored), fallback) }.getOrDefault(fallback)
+        }
+    }
+
+    private fun sanitize(profile: FormattingProfile): FormattingProfile = profile.copy(
+        name = profile.name.trim().take(48).ifBlank { "Profile" },
+        description = profile.description.trim().take(140),
+        prefix = profile.prefix.take(80),
+        suffix = profile.suffix.take(80),
+        customWords = profile.customWords
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinctBy { it.lowercase() }
+            .take(MAX_CUSTOM_WORDS)
+            .toCollection(linkedSetOf()),
+        replacements = profile.replacements.entries
+            .asSequence()
+            .map { it.key.trim() to it.value.trim() }
+            .filter { it.first.isNotBlank() && it.second.isNotBlank() }
+            .distinctBy { it.first.lowercase() }
+            .take(MAX_REPLACEMENTS)
+            .associateTo(linkedMapOf()) { it }
+    )
+
     private fun profileKey(id: String): String = "profile_$id"
+
+    private fun readCustomIds(): List<String> {
+        val raw = preferences.getString(CUSTOM_IDS_KEY, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    array.optString(index)
+                        .takeIf { it.startsWith("custom-") }
+                        ?.let(::add)
+                }
+            }.distinct().take(MAX_CUSTOM_PROFILES)
+        }.getOrDefault(emptyList())
+    }
+
+    private fun writeCustomIds(ids: List<String>) {
+        preferences.edit().putString(CUSTOM_IDS_KEY, JSONArray(ids).toString()).apply()
+    }
 
     private fun encode(profile: FormattingProfile): JSONObject = JSONObject().apply {
         put("id", profile.id)
@@ -114,7 +229,7 @@ class FormattingProfileStore private constructor(context: Context) {
         })
 
         put("customWords", JSONArray().apply {
-            profile.customWords.sorted().forEach { word -> put(word) }
+            profile.customWords.forEach(::put)
         })
     }
 
@@ -140,19 +255,22 @@ class FormattingProfileStore private constructor(context: Context) {
             }
         }
 
-        return fallback.copy(
-            name = json.optString("name", fallback.name).ifBlank { fallback.name },
-            description = json.optString("description", fallback.description),
-            prefix = json.optString("prefix", fallback.prefix),
-            suffix = json.optString("suffix", fallback.suffix),
-            bulletPrefix = json.optBoolean("bulletPrefix", fallback.bulletPrefix),
-            capitalizeSentences = json.optBoolean(
-                "capitalizeSentences",
-                fallback.capitalizeSentences
-            ),
-            addPunctuation = json.optBoolean("addPunctuation", fallback.addPunctuation),
-            replacements = replacements,
-            customWords = customWords
+        return sanitize(
+            fallback.copy(
+                id = fallback.id,
+                name = json.optString("name", fallback.name),
+                description = json.optString("description", fallback.description),
+                prefix = json.optString("prefix", fallback.prefix),
+                suffix = json.optString("suffix", fallback.suffix),
+                bulletPrefix = json.optBoolean("bulletPrefix", fallback.bulletPrefix),
+                capitalizeSentences = json.optBoolean(
+                    "capitalizeSentences",
+                    fallback.capitalizeSentences
+                ),
+                addPunctuation = json.optBoolean("addPunctuation", fallback.addPunctuation),
+                replacements = replacements,
+                customWords = customWords
+            )
         )
     }
 }

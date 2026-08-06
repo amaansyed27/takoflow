@@ -9,8 +9,8 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ExampleInstrumentedTest {
     @Test
-    fun applicationIdIsStable() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.dawnlightlabs.takoflow", context.packageName)
+    fun appUsesProductionApplicationId() {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        assertEquals("com.dawnlightlabs.takoflow", appContext.packageName)
     }
 }
