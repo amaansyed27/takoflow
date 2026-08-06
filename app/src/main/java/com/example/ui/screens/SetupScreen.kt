@@ -44,14 +44,14 @@ fun SetupScreen(onNavigateToEnable: () -> Unit) {
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Keyboard, contentDescription = null, tint = PrimaryAmber)
+            Icon(Icons.Default.Mic, contentDescription = null, tint = PrimaryAmber)
             Spacer(Modifier.width(8.dp))
             Text("TakoFlow setup", color = PrimaryAmber, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "Four checks, then you are ready",
+                "Set up your voice keyboard",
                 color = OnSurfaceDark,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
@@ -59,7 +59,7 @@ fun SetupScreen(onNavigateToEnable: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "Android requires you to enable and select the keyboard. TakoFlow also needs microphone access and its default offline Vosk model.",
+                "TakoFlow handles dictation while Samsung Keyboard or Gboard remains your normal typing keyboard. After setup, we will show you how to move between them.",
                 color = OnSurfaceVariantDark,
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center
@@ -72,6 +72,7 @@ fun SetupScreen(onNavigateToEnable: () -> Unit) {
                     SetupSummaryRow(Icons.Default.Keyboard, "Enable and select TakoFlow")
                     SetupSummaryRow(Icons.Default.Mic, "Allow microphone access")
                     SetupSummaryRow(Icons.Default.Lock, "Download the private offline model")
+                    SetupSummaryRow(Icons.Default.Keyboard, "Learn how to switch back for typing")
                 }
             }
         }
