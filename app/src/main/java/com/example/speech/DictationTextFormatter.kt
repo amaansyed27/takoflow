@@ -8,28 +8,53 @@ object DictationTextFormatter {
         autoCapitalization: Boolean,
         autoPunctuation: Boolean,
         profile: String
+    ): String = format(
+        raw = raw,
+        autoCapitalization = autoCapitalization,
+        autoPunctuation = autoPunctuation,
+        profile = FormattingProfileStore.builtInProfile(profile)
+    )
+
+    fun format(
+        raw: String,
+        autoCapitalization: Boolean,
+        autoPunctuation: Boolean,
+        profile: FormattingProfile
     ): String {
         var result = raw.trim()
 
-        if (profile == "work") {
-            result = result
-                .replace(Regex("\\bgonna\\b", RegexOption.IGNORE_CASE), "going to")
-                .replace(Regex("\\bwanna\\b", RegexOption.IGNORE_CASE), "want to")
-        }
+        profile.replacements.entries
+            .sortedByDescending { it.key.length }
+            .forEach { (source, replacement) ->
+                if (source.isBlank() || replacement.isBlank()) return@forEach
+                val pattern = Regex(
+                    "(?<!\\p{L})${Regex.escape(source)}(?!\\p{L})",
+                    RegexOption.IGNORE_CASE
+                )
+                result = pattern.replace(result, replacement)
+            }
 
-        if (autoCapitalization && result.isNotEmpty()) {
+        if (autoCapitalization && profile.capitalizeSentences && result.isNotEmpty()) {
             result = result.replaceFirstChar {
                 if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
             }
         }
 
         if (
-            autoPunctuation && result.isNotEmpty() &&
-            result.last() !in charArrayOf('.', '?', '!')
+            autoPunctuation && profile.addPunctuation && result.isNotEmpty() &&
+            result.last() !in charArrayOf('.', '?', '!', ':', ';')
         ) {
             result += "."
         }
 
-        return if (profile == "notes" && result.isNotEmpty()) "- $result" else result
+        if (profile.bulletPrefix && result.isNotEmpty()) {
+            result = "- $result"
+        }
+
+        return buildString {
+            if (profile.prefix.isNotBlank()) append(profile.prefix.trimEnd()).append(' ')
+            append(result)
+            if (profile.suffix.isNotBlank()) append(' ').append(profile.suffix.trimStart())
+        }.trim()
     }
 }
