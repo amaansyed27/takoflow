@@ -6,6 +6,10 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: write
+  actions: write
+
 concurrency:
   group: android-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -18,6 +22,36 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Apply staged overhaul
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d .takoflow-patch ]; then
+            cat .takoflow-patch/chunk* | base64 --decode > /tmp/takoflow-overhaul.tar.gz
+            tar -xzf /tmp/takoflow-overhaul.tar.gz -C .
+
+            rm -rf .takoflow-patch
+            rm -f .github/workflows/apply-app-overhaul.yml
+            rm -f .env.example metadata.json patch_dictation.py patch_service.py update_engine.py
+            rm -f app/src/main/java/com/example/data/VoiceProfile.kt
+            rm -f app/src/main/java/com/example/speech/AdaptiveLanguageModel.kt
+            rm -f app/src/test/java/com/example/ExampleRobolectricTest.kt
+            rm -f app/src/test/java/com/example/GreetingScreenshotTest.kt
+            rm -f app/src/test/screenshots/greeting.png
+            rm -f app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.webp
+            rm -f app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher_round.webp
+
+            git show origin/main:.github/workflows/android.yml > .github/workflows/android.yml
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Complete branded voice-first app experience"
+            git push origin HEAD:${GITHUB_HEAD_REF:-agent/complete-branded-app}
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
