@@ -12,7 +12,7 @@ object DictationTextFormatter {
         raw = raw,
         autoCapitalization = autoCapitalization,
         autoPunctuation = autoPunctuation,
-        profile = FormattingProfileStore.builtInProfile(profile)
+        profile = FormattingProfileStore.currentProfile(profile)
     )
 
     fun format(
