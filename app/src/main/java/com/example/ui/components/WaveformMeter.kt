@@ -18,9 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.PrimaryAmber
+import com.example.ui.theme.PrimaryAmberSoft
 
 @Composable
 fun WaveformMeter(
@@ -31,36 +33,30 @@ fun WaveformMeter(
     maxHeight: Dp = 24.dp
 ) {
     val transition = rememberInfiniteTransition(label = "waveform")
-
+    val level = rmsLevel.coerceIn(0f, 1f)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         repeat(barCount) { index ->
-            val duration = 800 + index * 150
-            val animatedScale by transition.animateFloat(
-                initialValue = 0.2f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = duration, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
+            val phase by transition.animateFloat(
+                0.25f,
+                1f,
+                infiniteRepeatable(
+                    tween(520 + index * 95, index * 42, FastOutSlowInEasing),
+                    RepeatMode.Reverse
                 ),
-                label = "bar_$index"
+                label = "bar$index"
             )
-
-            val barHeight = if (isListening) {
-                maxHeight * (0.3f + rmsLevel * 0.7f * animatedScale)
-            } else {
-                maxHeight * 0.2f
-            }
-
+            val scale = if (isListening) {
+                (0.24f + level * 0.68f) * (0.55f + phase * 0.45f)
+            } else 0.18f
             Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(barHeight)
+                Modifier.width(4.dp)
+                    .height(maxHeight * scale.coerceIn(0.15f, 1f))
                     .clip(CircleShape)
-                    .background(PrimaryAmber)
+                    .background(Brush.verticalGradient(listOf(PrimaryAmberSoft, PrimaryAmber)))
             )
         }
     }

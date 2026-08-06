@@ -1,9 +1,11 @@
-# JNI method names are resolved by whisper_jni.cpp and must not be renamed.
+# Preserve JNI entry points and native-backed speech libraries.
 -keep class com.example.speech.WhisperBridge { *; }
 -keepclasseswithmembernames class * {
     native <methods>;
 }
-
-# Keep Vosk's reflection-facing native bindings.
 -keep class org.vosk.** { *; }
--dontwarn org.vosk.**
+-keep class com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+
+# Preserve useful source information in release crash reports.
+-keepattributes SourceFile,LineNumberTable

@@ -3,12 +3,13 @@ package com.example.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 private val TakoFlowColorScheme = darkColorScheme(
-    primary = PrimaryLight,
+    primary = PrimaryAmber,
     onPrimary = OnPrimaryDark,
-    primaryContainer = PrimaryAmber,
-    onPrimaryContainer = OnPrimaryContainer,
+    primaryContainer = SurfaceContainerHigh,
+    onPrimaryContainer = PrimaryLight,
     background = DarkBackground,
     onBackground = OnSurfaceDark,
     surface = SurfaceDark,
@@ -18,19 +19,12 @@ private val TakoFlowColorScheme = darkColorScheme(
     outline = OutlineDark,
     outlineVariant = OutlineVariantDark,
     secondary = SecondaryCharcoal,
-    secondaryContainer = SecondaryContainerDark
+    secondaryContainer = SecondaryContainerDark,
+    error = ErrorRed,
+    scrim = Color.Black
 )
 
 @Composable
-fun MyApplicationTheme(
-    darkTheme: Boolean = true,
-    dynamicColor: Boolean = false,
-    content: @Composable () -> Unit
-) {
-    MaterialTheme(
-        colorScheme = TakoFlowColorScheme,
-        typography = Typography,
-        content = content
-    )
+fun MyApplicationTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = TakoFlowColorScheme, typography = Typography, content = content)
 }
-

@@ -2,30 +2,24 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val DarkBackground = Color(0xFF0A0A0A)
-val SurfaceDark = Color(0xFF131313)
-val SurfaceContainerLowest = Color(0xFF0F0F0F)
-val SurfaceContainerLow = Color(0xFF1C1B1B)
-val SurfaceContainer = Color(0xFF201F1F)
-val SurfaceContainerHigh = Color(0xFF2A2A2A)
-val SurfaceContainerHighest = Color(0xFF353534)
-
-val OnSurfaceDark = Color(0xFFE5E2E1)
-val OnSurfaceVariantDark = Color(0xFFD0C6AB)
-
-val PrimaryAmber = Color(0xFFFFD700)
-val PrimaryLight = Color(0xFFFFF6DF)
-val OnPrimaryDark = Color(0xFF3A3000)
-val OnPrimaryContainer = Color(0xFF705E00)
-
-val PrimaryFixed = Color(0xFFFFE16D)
-val PrimaryFixedDim = Color(0xFFE9C400)
-
-val OutlineVariantDark = Color(0xFF4D4732)
-val OutlineDark = Color(0xFF999077)
-
-val SecondaryCharcoal = Color(0xFFC8C6C5)
-val SecondaryContainerDark = Color(0xFF474746)
-
-val ActiveGreen = Color(0xFF22C55E)
-
+val DarkBackground = Color(0xFF07090E)
+val NavyGlow = Color(0xFF0B1834)
+val SurfaceDark = Color(0xFF101319)
+val SurfaceContainerLowest = Color(0xFF0B0E13)
+val SurfaceContainerLow = Color(0xFF141821)
+val SurfaceContainer = Color(0xFF1A1F29)
+val SurfaceContainerHigh = Color(0xFF222936)
+val SurfaceContainerHighest = Color(0xFF2C3443)
+val OnSurfaceDark = Color(0xFFF3F0E8)
+val OnSurfaceVariantDark = Color(0xFFBDB8AA)
+val PrimaryAmber = Color(0xFFFFD323)
+val PrimaryAmberSoft = Color(0xFFFFE47A)
+val PrimaryLight = Color(0xFFFFF4C2)
+val OnPrimaryDark = Color(0xFF342A00)
+val OnPrimaryContainer = Color(0xFF594900)
+val OutlineVariantDark = Color(0xFF3A4252)
+val OutlineDark = Color(0xFF7E8798)
+val SecondaryCharcoal = Color(0xFFD3D7E0)
+val SecondaryContainerDark = Color(0xFF303746)
+val ActiveGreen = Color(0xFF47D18C)
+val ErrorRed = Color(0xFFFF6B76)

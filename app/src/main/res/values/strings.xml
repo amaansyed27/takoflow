@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">TakoFlow</string>
+    <string name="ime_name">TakoFlow Voice</string>
+    <string name="ime_subtype_en_us">English (US)</string>
 </resources>
