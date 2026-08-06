@@ -23,6 +23,9 @@ class TakoFlowPreferences(private val context: Context) {
         val KEY_VIBRATION_FEEDBACK = booleanPreferencesKey("vibration_feedback")
         val KEY_ACTIVE_PROFILE_ID = stringPreferencesKey("active_profile_id")
         val KEY_SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
+        val KEY_AUTO_CORRECT = booleanPreferencesKey("auto_correct")
+        val KEY_PREDICTIONS = booleanPreferencesKey("word_predictions")
+        val KEY_LEARN_HISTORY = booleanPreferencesKey("learn_from_typing")
     }
 
     val autoStartListening: Flow<Boolean> =
@@ -45,6 +48,12 @@ class TakoFlowPreferences(private val context: Context) {
         context.dataStore.data.map { it[KEY_ACTIVE_PROFILE_ID] ?: "default" }
     val setupCompleted: Flow<Boolean> =
         context.dataStore.data.map { it[KEY_SETUP_COMPLETED] ?: false }
+    val autoCorrect: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_AUTO_CORRECT] ?: true }
+    val wordPredictions: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_PREDICTIONS] ?: true }
+    val learnFromTyping: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_LEARN_HISTORY] ?: true }
 
     suspend fun setAutoStartListening(value: Boolean) {
         context.dataStore.edit { it[KEY_AUTO_START] = value }
@@ -84,5 +93,17 @@ class TakoFlowPreferences(private val context: Context) {
 
     suspend fun setSetupCompleted(value: Boolean) {
         context.dataStore.edit { it[KEY_SETUP_COMPLETED] = value }
+    }
+
+    suspend fun setAutoCorrect(value: Boolean) {
+        context.dataStore.edit { it[KEY_AUTO_CORRECT] = value }
+    }
+
+    suspend fun setWordPredictions(value: Boolean) {
+        context.dataStore.edit { it[KEY_PREDICTIONS] = value }
+    }
+
+    suspend fun setLearnFromTyping(value: Boolean) {
+        context.dataStore.edit { it[KEY_LEARN_HISTORY] = value }
     }
 }
