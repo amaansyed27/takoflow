@@ -31,7 +31,7 @@
         </activity>
 
         <service
-            android:name=".service.TakoFlowInputMethodService"
+            android:name=".service.TakoFlowFixedInputMethodService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD">
