@@ -22,6 +22,7 @@ import com.example.ui.components.BottomNavBar
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.EnableKeyboardStepperScreen
 import com.example.ui.screens.GeneralSettingsScreen
+import com.example.ui.screens.KeyboardSwitchGuideScreen
 import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.SetupScreen
 import com.example.ui.screens.VoiceDictationScreen
@@ -44,7 +45,13 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 val currentBackStack by navController.currentBackStackEntryAsState()
                 val currentRoute = currentBackStack?.destination?.route
-                val isSetupRoute = currentRoute in listOf("onboarding", "setup", "enable_keyboard")
+                val isSetupRoute = currentRoute in listOf(
+                    "onboarding",
+                    "setup",
+                    "enable_keyboard",
+                    "switching_guide_setup",
+                    "switching_guide"
+                )
                 val startDestination = if (setupCompleted) "dashboard" else "onboarding"
 
                 Scaffold(
@@ -88,10 +95,21 @@ class MainActivity : ComponentActivity() {
                                     scope.launch {
                                         preferences.setSetupCompleted(true)
                                         preferences.setInferenceModel(SpeechModels.VOSK)
-                                        navController.navigate("dashboard") {
-                                            popUpTo(navController.graph.id) { inclusive = true }
+                                        preferences.setKeyboardMode("Voice Only Mode")
+                                        navController.navigate("switching_guide_setup") {
+                                            popUpTo("enable_keyboard") { inclusive = true }
                                             launchSingleTop = true
                                         }
+                                    }
+                                }
+                            )
+                        }
+                        composable("switching_guide_setup") {
+                            KeyboardSwitchGuideScreen(
+                                onContinue = {
+                                    navController.navigate("dashboard") {
+                                        popUpTo(navController.graph.id) { inclusive = true }
+                                        launchSingleTop = true
                                     }
                                 }
                             )
@@ -117,7 +135,14 @@ class MainActivity : ComponentActivity() {
                             GeneralSettingsScreen(
                                 preferences = preferences,
                                 onBack = { navController.popBackStack() },
-                                onNavigateToVoiceSettings = { navController.navigate("voice_settings") }
+                                onNavigateToVoiceSettings = { navController.navigate("voice_settings") },
+                                onNavigateToSwitchingGuide = { navController.navigate("switching_guide") }
+                            )
+                        }
+                        composable("switching_guide") {
+                            KeyboardSwitchGuideScreen(
+                                onBack = { navController.popBackStack() },
+                                onContinue = { navController.popBackStack() }
                             )
                         }
                         composable("voice_profiles") {
