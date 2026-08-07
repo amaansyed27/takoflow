@@ -54,7 +54,12 @@ fun VoiceProfilesScreen(
     container: TakoFlowAppContainer,
     onBack: () -> Unit
 ) {
-    val viewModel: ProfilesViewModel = takoFlowViewModel { ProfilesViewModel(container) }
+    val viewModel: ProfilesViewModel = takoFlowViewModel {
+        ProfilesViewModel(
+            settings = container.settings,
+            profilesRepository = container.profiles
+        )
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<FormattingProfile?>(null) }
 
