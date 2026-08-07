@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -26,20 +25,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.TakoFlowPreferences
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.core.TakoFlowAppContainer
 import com.example.speech.ModelDownloadState
-import com.example.speech.SpeechModelManager
 import com.example.speech.SpeechModels
 import com.example.ui.components.BrandHeader
 import com.example.ui.components.GlassCard
@@ -48,30 +42,17 @@ import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
 import com.example.ui.theme.OnSurfaceVariantDark
 import com.example.ui.theme.PrimaryAmber
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.example.ui.viewmodel.VoiceSettingsViewModel
+import com.example.ui.viewmodel.takoFlowViewModel
 import java.util.Locale
 
 @Composable
 fun VoiceSettingsScreen(
-    preferences: TakoFlowPreferences,
+    container: TakoFlowAppContainer,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val manager = remember { SpeechModelManager.get(context) }
-    val vosk by manager.voskState.collectAsState()
-    val whisper by manager.whisperState.collectAsState()
-    val selectedModel by preferences.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
-    val punctuation by preferences.punctuation.collectAsState(initial = true)
-    val caps by preferences.autoCapitalization.collectAsState(initial = true)
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            manager.refresh()
-            delay(1_000)
-        }
-    }
+    val viewModel: VoiceSettingsViewModel = takoFlowViewModel { VoiceSettingsViewModel(container) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxSize().background(DarkBackground)
@@ -84,40 +65,48 @@ fun VoiceSettingsScreen(
         ModelCard(
             title = "Vosk Small English",
             subtitle = "Default · streaming · low latency · about 40 MB",
-            state = vosk,
-            selected = selectedModel == SpeechModels.VOSK,
-            onSelect = { scope.launch { preferences.setInferenceModel(SpeechModels.VOSK) } },
-            onDownload = manager::downloadVosk,
-            onCancel = manager::cancelVoskDownload,
-            onDelete = manager::deleteVosk
+            state = uiState.vosk,
+            selected = uiState.selectedModel == SpeechModels.VOSK,
+            onSelect = { viewModel.selectModel(SpeechModels.VOSK) },
+            onDownload = viewModel::downloadVosk,
+            onCancel = viewModel::cancelVoskDownload,
+            onDelete = viewModel::deleteVosk
         )
         Spacer(Modifier.height(12.dp))
         ModelCard(
             title = "Whisper Tiny English",
             subtitle = "Optional · higher accuracy · processes after recording · about 75 MB",
-            state = whisper,
-            selected = selectedModel == SpeechModels.WHISPER_TINY,
-            onSelect = { scope.launch { preferences.setInferenceModel(SpeechModels.WHISPER_TINY) } },
-            onDownload = manager::downloadWhisper,
-            onCancel = manager::cancelWhisperDownload,
-            onDelete = manager::deleteWhisper
+            state = uiState.whisper,
+            selected = uiState.selectedModel == SpeechModels.WHISPER_TINY,
+            onSelect = { viewModel.selectModel(SpeechModels.WHISPER_TINY) },
+            onDownload = viewModel::downloadWhisper,
+            onCancel = viewModel::cancelWhisperDownload,
+            onDelete = viewModel::deleteWhisper
         )
 
         Spacer(Modifier.height(22.dp))
-        Text("TEXT FORMATTING", color = OnSurfaceVariantDark, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text(
+            "TEXT FORMATTING",
+            color = OnSurfaceVariantDark,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.4.sp
+        )
         Spacer(Modifier.height(8.dp))
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 VoiceToggle(
                     "Automatic punctuation",
                     "Add sentence-ending punctuation when a profile allows it",
-                    punctuation
-                ) { scope.launch { preferences.setPunctuation(it) } }
+                    uiState.punctuation,
+                    viewModel::setPunctuation
+                )
                 VoiceToggle(
                     "Automatic capitalization",
                     "Capitalize the beginning of completed dictation",
-                    caps
-                ) { scope.launch { preferences.setAutoCapitalization(it) } }
+                    uiState.autoCapitalization,
+                    viewModel::setAutoCapitalization
+                )
             }
         }
 
@@ -235,7 +224,12 @@ private fun ModelCard(
 }
 
 @Composable
-private fun VoiceToggle(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun VoiceToggle(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
