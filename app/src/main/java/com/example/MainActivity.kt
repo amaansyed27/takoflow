@@ -49,7 +49,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                val appViewModel: AppViewModel = takoFlowViewModel { AppViewModel(container) }
+                val appViewModel: AppViewModel = takoFlowViewModel {
+                    AppViewModel(container.settings)
+                }
                 val setupCompleted by appViewModel.setupCompleted.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
                 val currentBackStack by navController.currentBackStackEntryAsState()
