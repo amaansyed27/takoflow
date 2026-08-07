@@ -51,7 +51,12 @@ fun VoiceSettingsScreen(
     container: TakoFlowAppContainer,
     onBack: () -> Unit
 ) {
-    val viewModel: VoiceSettingsViewModel = takoFlowViewModel { VoiceSettingsViewModel(container) }
+    val viewModel: VoiceSettingsViewModel = takoFlowViewModel {
+        VoiceSettingsViewModel(
+            settings = container.settings,
+            models = container.models
+        )
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
