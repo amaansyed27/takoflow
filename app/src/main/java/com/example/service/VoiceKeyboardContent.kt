@@ -55,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.speech.SpeechModels
 import com.example.speech.SpeechState
 import com.example.ui.components.BrandMark
 import com.example.ui.components.WaveformMeter
@@ -82,13 +81,13 @@ fun VoiceKeyboardPanel(
     onDelete: () -> Unit,
     onEnter: () -> Unit
 ) {
-    val isRecording = state is SpeechState.Listening ||
-        (modelName == SpeechModels.VOSK && state is SpeechState.Processing)
-    val isTranscribing = modelName == SpeechModels.WHISPER_TINY && state is SpeechState.Processing
-    val partial = if (modelName == SpeechModels.VOSK && state is SpeechState.Processing) {
-        state.partialText
-    } else {
-        ""
+    val isRecording = state is SpeechState.Listening
+    val isBusy = state is SpeechState.Preparing || state is SpeechState.Processing
+    val partial = (state as? SpeechState.Listening)?.partialText.orEmpty()
+    val busyMessage = when (state) {
+        is SpeechState.Preparing -> state.message
+        is SpeechState.Processing -> state.partialText
+        else -> "Processing on device…"
     }
     var elapsedMs by remember { mutableLongStateOf(0L) }
 
@@ -141,7 +140,7 @@ fun VoiceKeyboardPanel(
         val visualState = when {
             sensitiveField -> "sensitive"
             isRecording -> "recording"
-            isTranscribing -> "processing"
+            isBusy -> "processing"
             state is SpeechState.Error -> "error"
             else -> "idle"
         }
@@ -161,9 +160,7 @@ fun VoiceKeyboardPanel(
                 when (target) {
                     "sensitive" -> SensitiveState()
                     "recording" -> RecordingState(partial, rmsDb, elapsedMs, onMicClick)
-                    "processing" -> ProcessingState(
-                        (state as? SpeechState.Processing)?.partialText ?: "Transcribing on device…"
-                    )
+                    "processing" -> ProcessingState(busyMessage)
                     "error" -> ErrorState(
                         (state as? SpeechState.Error)?.message ?: "Voice typing failed.",
                         onMicClick
@@ -212,7 +209,12 @@ private fun RecordingState(partial: String, rmsDb: Float, elapsedMs: Long, onSto
                         maxHeight = 28.dp
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text(formatElapsed(elapsedMs), color = PrimaryAmber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        formatElapsed(elapsedMs),
+                        color = PrimaryAmber,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -287,7 +289,10 @@ private fun AnimatedMicButton(listening: Boolean, rmsDb: Float, onClick: () -> U
     val ringScale by transition.animateFloat(
         1f,
         if (listening) 1.34f else 1.08f,
-        infiniteRepeatable(tween(if (listening) 900 else 1600, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        infiniteRepeatable(
+            tween(if (listening) 900 else 1600, easing = FastOutSlowInEasing),
+            RepeatMode.Restart
+        ),
         label = "ringScale"
     )
     val ringAlpha by transition.animateFloat(
@@ -343,8 +348,10 @@ private fun UtilityKey(
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, tween(90), label = "keyScale")
     Box(
-        modifier = modifier.height(48.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(10.dp))
+        modifier = modifier.height(48.dp).graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }.clip(RoundedCornerShape(10.dp))
             .background(if (highlighted) PrimaryAmber else SurfaceContainer)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
