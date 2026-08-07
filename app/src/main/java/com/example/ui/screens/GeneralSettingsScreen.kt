@@ -76,9 +76,13 @@ fun GeneralSettingsScreen(
                 SettingStatus("TakoFlow enabled", uiState.imeEnabled)
                 SettingStatus("TakoFlow selected", uiState.imeSelected)
                 Spacer(Modifier.height(8.dp))
-                SettingAction("Open Android keyboard settings", "Manage enabled keyboards") {
-                    context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
-                }
+                SettingAction(
+                    title = "Open Android keyboard settings",
+                    subtitle = "Manage enabled keyboards",
+                    onClick = {
+                        context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                    }
+                )
             }
         }
 
