@@ -58,7 +58,13 @@ fun EnableKeyboardStepperScreen(
     onCompleteSetup: () -> Unit
 ) {
     val context = LocalContext.current
-    val viewModel: SetupViewModel = takoFlowViewModel { SetupViewModel(container) }
+    val viewModel: SetupViewModel = takoFlowViewModel {
+        SetupViewModel(
+            settings = container.settings,
+            models = container.models,
+            systemStatus = container.systemStatus
+        )
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val permissionLauncher = rememberLauncherForActivityResult(
