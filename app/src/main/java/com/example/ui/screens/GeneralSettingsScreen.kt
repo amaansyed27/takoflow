@@ -121,10 +121,7 @@ fun GeneralSettingsScreen(
                 SettingAction(
                     "Run setup again",
                     "Recheck permissions, keyboard and model",
-                    {
-                        viewModel.resetSetup()
-                        onRunSetupAgain()
-                    },
+                    onRunSetupAgain,
                     Icons.Default.Refresh
                 )
             }
