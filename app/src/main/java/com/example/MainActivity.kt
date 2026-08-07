@@ -13,21 +13,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.data.TakoFlowPreferences
-import com.example.speech.FormattingProfileStore
-import com.example.speech.SpeechModels
+import com.example.core.TakoFlowAppContainer
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BrandLaunchOverlay
 import com.example.ui.screens.DashboardScreen
@@ -40,22 +37,21 @@ import com.example.ui.screens.VoiceDictationScreen
 import com.example.ui.screens.VoiceProfilesScreen
 import com.example.ui.screens.VoiceSettingsScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.viewmodel.AppViewModel
+import com.example.ui.viewmodel.takoFlowViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val preferences = TakoFlowPreferences(applicationContext)
-        FormattingProfileStore.get(applicationContext)
+        val container = TakoFlowAppContainer.get(applicationContext)
 
         setContent {
             MyApplicationTheme {
-                val setupCompleted by preferences.setupCompleted.collectAsState(initial = false)
+                val appViewModel: AppViewModel = takoFlowViewModel { AppViewModel(container) }
+                val setupCompleted by appViewModel.setupCompleted.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
-                val scope = rememberCoroutineScope()
                 val currentBackStack by navController.currentBackStackEntryAsState()
                 val currentRoute = currentBackStack?.destination?.route
                 var launchOverlayVisible by remember { mutableStateOf(true) }
@@ -110,21 +106,17 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("setup") {
                                 SetupScreen(
-                                    onNavigateToEnable = {
-                                        navController.navigate("enable_keyboard")
-                                    }
+                                    onNavigateToEnable = { navController.navigate("enable_keyboard") }
                                 )
                             }
                             composable("enable_keyboard") {
                                 EnableKeyboardStepperScreen(
+                                    container = container,
                                     onBack = { navController.popBackStack() },
                                     onCompleteSetup = {
-                                        scope.launch {
-                                            preferences.setInferenceModel(SpeechModels.VOSK)
-                                            navController.navigate("switching_guide_setup") {
-                                                popUpTo("enable_keyboard") { inclusive = true }
-                                                launchSingleTop = true
-                                            }
+                                        navController.navigate("switching_guide_setup") {
+                                            popUpTo("enable_keyboard") { inclusive = true }
+                                            launchSingleTop = true
                                         }
                                     }
                                 )
@@ -132,12 +124,10 @@ class MainActivity : ComponentActivity() {
                             composable("switching_guide_setup") {
                                 KeyboardSwitchGuideScreen(
                                     onContinue = {
-                                        scope.launch {
-                                            preferences.setSetupCompleted(true)
-                                            navController.navigate("dashboard") {
-                                                popUpTo(navController.graph.id) { inclusive = true }
-                                                launchSingleTop = true
-                                            }
+                                        appViewModel.setSetupCompleted(true)
+                                        navController.navigate("dashboard") {
+                                            popUpTo(navController.graph.id) { inclusive = true }
+                                            launchSingleTop = true
                                         }
                                     }
                                 )
@@ -145,7 +135,7 @@ class MainActivity : ComponentActivity() {
 
                             composable("dashboard") {
                                 DashboardScreen(
-                                    preferences = preferences,
+                                    container = container,
                                     onNavigateToEnable = { navController.navigate("enable_keyboard") },
                                     onNavigateToVoiceSettings = { navController.navigate("voice_settings") },
                                     onNavigateToProfiles = { navController.navigateMainTab("voice_profiles") },
@@ -160,13 +150,13 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("voice_settings") {
                                 VoiceSettingsScreen(
-                                    preferences = preferences,
+                                    container = container,
                                     onBack = { navController.popBackStack() }
                                 )
                             }
                             composable("general_settings") {
                                 GeneralSettingsScreen(
-                                    preferences = preferences,
+                                    container = container,
                                     onBack = { navController.navigateMainTab("dashboard") },
                                     onNavigateToVoiceSettings = {
                                         navController.navigate("voice_settings")
@@ -175,11 +165,8 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("switching_guide")
                                     },
                                     onRunSetupAgain = {
-                                        scope.launch {
-                                            preferences.setSetupCompleted(false)
-                                            navController.navigate("setup") {
-                                                popUpTo(navController.graph.id) { inclusive = true }
-                                            }
+                                        navController.navigate("setup") {
+                                            popUpTo(navController.graph.id) { inclusive = true }
                                         }
                                     }
                                 )
@@ -192,13 +179,13 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("voice_profiles") {
                                 VoiceProfilesScreen(
-                                    preferences = preferences,
+                                    container = container,
                                     onBack = { navController.navigateMainTab("dashboard") }
                                 )
                             }
                             composable("dictation") {
                                 VoiceDictationScreen(
-                                    preferences = preferences,
+                                    container = container,
                                     onBack = { navController.popBackStack() }
                                 )
                             }
