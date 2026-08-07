@@ -2,7 +2,10 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.FormattingProfileRepository
+import com.example.data.repository.SettingsRepository
+import com.example.data.repository.SpeechModelRepository
+import com.example.data.repository.SystemStatusRepository
 import com.example.speech.SpeechModels
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,12 +27,12 @@ data class DashboardUiState(
         get() = imeEnabled && imeSelected && microphoneGranted && selectedModelReady
 }
 
-class DashboardViewModel(container: TakoFlowAppContainer) : ViewModel() {
-    private val settings = container.settings
-    private val models = container.models
-    private val profiles = container.profiles
-    private val systemStatus = container.systemStatus
-
+class DashboardViewModel(
+    private val settings: SettingsRepository,
+    private val models: SpeechModelRepository,
+    private val profiles: FormattingProfileRepository,
+    private val systemStatus: SystemStatusRepository
+) : ViewModel() {
     private val selection = combine(
         settings.inferenceModel,
         settings.activeProfileId
