@@ -20,4 +20,8 @@ class AppViewModel(
     fun setSetupCompleted(value: Boolean) {
         viewModelScope.launch { settings.setSetupCompleted(value) }
     }
+
+    fun setInferenceModel(model: String) {
+        viewModelScope.launch { settings.setInferenceModel(model) }
+    }
 }
