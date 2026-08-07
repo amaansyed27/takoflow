@@ -80,8 +80,4 @@ class GeneralSettingsViewModel(
     fun setVibration(enabled: Boolean) {
         viewModelScope.launch { settings.setVibrationFeedback(enabled) }
     }
-
-    fun resetSetup() {
-        viewModelScope.launch { settings.setSetupCompleted(false) }
-    }
 }
