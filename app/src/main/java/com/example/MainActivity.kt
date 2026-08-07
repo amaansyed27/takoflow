@@ -65,140 +65,141 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val mainTabs = setOf("dashboard", "voice_profiles", "general_settings")
-                val startDestination = if (setupCompleted) "dashboard" else "onboarding"
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        bottomBar = {
-                            if (currentRoute in mainTabs) {
-                                BottomNavBar(
-                                    currentRoute = currentRoute.orEmpty(),
-                                    onNavigate = { route -> navController.navigateMainTab(route) }
-                                )
+                    if (setupCompleted != null) {
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            bottomBar = {
+                                if (currentRoute in mainTabs) {
+                                    BottomNavBar(
+                                        currentRoute = currentRoute.orEmpty(),
+                                        onNavigate = { route -> navController.navigateMainTab(route) }
+                                    )
+                                }
                             }
-                        }
-                    ) { innerPadding ->
-                        NavHost(
-                            navController = navController,
-                            startDestination = startDestination,
-                            modifier = Modifier.padding(innerPadding),
-                            enterTransition = {
-                                fadeIn(tween(180)) + slideIntoContainer(
-                                    AnimatedContentTransitionScope.SlideDirection.Left,
-                                    tween(240)
-                                )
-                            },
-                            exitTransition = { fadeOut(tween(120)) },
-                            popEnterTransition = {
-                                fadeIn(tween(180)) + slideIntoContainer(
-                                    AnimatedContentTransitionScope.SlideDirection.Right,
-                                    tween(240)
-                                )
-                            },
-                            popExitTransition = { fadeOut(tween(120)) }
-                        ) {
-                            composable("onboarding") {
-                                OnboardingScreen(
-                                    onFinishOnboarding = {
-                                        navController.navigate("setup") {
-                                            popUpTo("onboarding") { inclusive = true }
+                        ) { innerPadding ->
+                            NavHost(
+                                navController = navController,
+                                startDestination = if (setupCompleted == true) "dashboard" else "onboarding",
+                                modifier = Modifier.padding(innerPadding),
+                                enterTransition = {
+                                    fadeIn(tween(180)) + slideIntoContainer(
+                                        AnimatedContentTransitionScope.SlideDirection.Left,
+                                        tween(240)
+                                    )
+                                },
+                                exitTransition = { fadeOut(tween(120)) },
+                                popEnterTransition = {
+                                    fadeIn(tween(180)) + slideIntoContainer(
+                                        AnimatedContentTransitionScope.SlideDirection.Right,
+                                        tween(240)
+                                    )
+                                },
+                                popExitTransition = { fadeOut(tween(120)) }
+                            ) {
+                                composable("onboarding") {
+                                    OnboardingScreen(
+                                        onFinishOnboarding = {
+                                            navController.navigate("setup") {
+                                                popUpTo("onboarding") { inclusive = true }
+                                            }
                                         }
-                                    }
-                                )
-                            }
-                            composable("setup") {
-                                SetupScreen(
-                                    onNavigateToEnable = { navController.navigate("enable_keyboard") }
-                                )
-                            }
-                            composable("enable_keyboard") {
-                                EnableKeyboardStepperScreen(
-                                    container = container,
-                                    onBack = { navController.popBackStack() },
-                                    onCompleteSetup = {
-                                        appViewModel.setInferenceModel(SpeechModels.VOSK)
-                                        navController.navigate("switching_guide_setup") {
-                                            popUpTo("enable_keyboard") { inclusive = true }
-                                            launchSingleTop = true
+                                    )
+                                }
+                                composable("setup") {
+                                    SetupScreen(
+                                        onNavigateToEnable = { navController.navigate("enable_keyboard") }
+                                    )
+                                }
+                                composable("enable_keyboard") {
+                                    EnableKeyboardStepperScreen(
+                                        container = container,
+                                        onBack = { navController.popBackStack() },
+                                        onCompleteSetup = {
+                                            appViewModel.setInferenceModel(SpeechModels.VOSK)
+                                            navController.navigate("switching_guide_setup") {
+                                                popUpTo("enable_keyboard") { inclusive = true }
+                                                launchSingleTop = true
+                                            }
                                         }
-                                    }
-                                )
-                            }
-                            composable("switching_guide_setup") {
-                                KeyboardSwitchGuideScreen(
-                                    onContinue = {
-                                        appViewModel.setSetupCompleted(true)
-                                        navController.navigate("dashboard") {
-                                            popUpTo(navController.graph.id) { inclusive = true }
-                                            launchSingleTop = true
+                                    )
+                                }
+                                composable("switching_guide_setup") {
+                                    KeyboardSwitchGuideScreen(
+                                        onContinue = {
+                                            appViewModel.setSetupCompleted(true)
+                                            navController.navigate("dashboard") {
+                                                popUpTo(navController.graph.id) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
                                         }
-                                    }
-                                )
-                            }
+                                    )
+                                }
 
-                            composable("dashboard") {
-                                DashboardScreen(
-                                    container = container,
-                                    onNavigateToEnable = { navController.navigate("enable_keyboard") },
-                                    onNavigateToVoiceSettings = { navController.navigate("voice_settings") },
-                                    onNavigateToProfiles = { navController.navigateMainTab("voice_profiles") },
-                                    onNavigateToGeneralSettings = {
-                                        navController.navigateMainTab("general_settings")
-                                    },
-                                    onNavigateToSwitchingGuide = {
-                                        navController.navigate("switching_guide")
-                                    },
-                                    onNavigateToDictation = { navController.navigate("dictation") }
-                                )
-                            }
-                            composable("voice_settings") {
-                                VoiceSettingsScreen(
-                                    container = container,
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
-                            composable("general_settings") {
-                                GeneralSettingsScreen(
-                                    container = container,
-                                    onBack = { navController.navigateMainTab("dashboard") },
-                                    onNavigateToVoiceSettings = {
-                                        navController.navigate("voice_settings")
-                                    },
-                                    onNavigateToSwitchingGuide = {
-                                        navController.navigate("switching_guide")
-                                    },
-                                    onRunSetupAgain = {
-                                        appViewModel.setSetupCompleted(false)
-                                        navController.navigate("setup") {
-                                            popUpTo(navController.graph.id) { inclusive = true }
+                                composable("dashboard") {
+                                    DashboardScreen(
+                                        container = container,
+                                        onNavigateToEnable = { navController.navigate("enable_keyboard") },
+                                        onNavigateToVoiceSettings = { navController.navigate("voice_settings") },
+                                        onNavigateToProfiles = { navController.navigateMainTab("voice_profiles") },
+                                        onNavigateToGeneralSettings = {
+                                            navController.navigateMainTab("general_settings")
+                                        },
+                                        onNavigateToSwitchingGuide = {
+                                            navController.navigate("switching_guide")
+                                        },
+                                        onNavigateToDictation = { navController.navigate("dictation") }
+                                    )
+                                }
+                                composable("voice_settings") {
+                                    VoiceSettingsScreen(
+                                        container = container,
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
+                                composable("general_settings") {
+                                    GeneralSettingsScreen(
+                                        container = container,
+                                        onBack = { navController.navigateMainTab("dashboard") },
+                                        onNavigateToVoiceSettings = {
+                                            navController.navigate("voice_settings")
+                                        },
+                                        onNavigateToSwitchingGuide = {
+                                            navController.navigate("switching_guide")
+                                        },
+                                        onRunSetupAgain = {
+                                            appViewModel.setSetupCompleted(false)
+                                            navController.navigate("setup") {
+                                                popUpTo(navController.graph.id) { inclusive = true }
+                                            }
                                         }
-                                    }
-                                )
-                            }
-                            composable("switching_guide") {
-                                KeyboardSwitchGuideScreen(
-                                    onBack = { navController.popBackStack() },
-                                    onContinue = { navController.popBackStack() }
-                                )
-                            }
-                            composable("voice_profiles") {
-                                VoiceProfilesScreen(
-                                    container = container,
-                                    onBack = { navController.navigateMainTab("dashboard") }
-                                )
-                            }
-                            composable("dictation") {
-                                VoiceDictationScreen(
-                                    container = container,
-                                    onBack = { navController.popBackStack() }
-                                )
+                                    )
+                                }
+                                composable("switching_guide") {
+                                    KeyboardSwitchGuideScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onContinue = { navController.popBackStack() }
+                                    )
+                                }
+                                composable("voice_profiles") {
+                                    VoiceProfilesScreen(
+                                        container = container,
+                                        onBack = { navController.navigateMainTab("dashboard") }
+                                    )
+                                }
+                                composable("dictation") {
+                                    VoiceDictationScreen(
+                                        container = container,
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
                             }
                         }
                     }
 
                     BrandLaunchOverlay(
-                        visible = launchOverlayVisible,
+                        visible = launchOverlayVisible || setupCompleted == null,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
