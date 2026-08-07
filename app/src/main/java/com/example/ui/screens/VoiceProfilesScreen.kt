@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,40 +27,35 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.TakoFlowPreferences
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.core.TakoFlowAppContainer
 import com.example.speech.DictationTextFormatter
 import com.example.speech.FormattingProfile
-import com.example.speech.FormattingProfileStore
 import com.example.ui.components.BrandHeader
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
 import com.example.ui.theme.OnSurfaceVariantDark
 import com.example.ui.theme.PrimaryAmber
-import kotlinx.coroutines.launch
+import com.example.ui.viewmodel.ProfilesViewModel
+import com.example.ui.viewmodel.takoFlowViewModel
 
 @Composable
 fun VoiceProfilesScreen(
-    preferences: TakoFlowPreferences,
+    container: TakoFlowAppContainer,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val store = remember { FormattingProfileStore.get(context) }
-    val profiles by store.profiles.collectAsState()
-    val activeId by preferences.activeProfileId.collectAsState(initial = "default")
+    val viewModel: ProfilesViewModel = takoFlowViewModel { ProfilesViewModel(container) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<FormattingProfile?>(null) }
 
     Column(
@@ -72,11 +66,11 @@ fun VoiceProfilesScreen(
         BrandHeader("Formatting profiles", "Control how completed dictation is written", onBack = onBack)
         Spacer(Modifier.padding(8.dp))
 
-        profiles.forEach { profile ->
+        uiState.profiles.forEach { profile ->
             ProfileCard(
                 profile = profile,
-                active = activeId == profile.id,
-                onSelect = { scope.launch { preferences.setActiveProfileId(profile.id) } },
+                active = uiState.activeId == profile.id,
+                onSelect = { viewModel.select(profile.id) },
                 onEdit = { editing = profile }
             )
             Spacer(Modifier.padding(5.dp))
@@ -84,8 +78,7 @@ fun VoiceProfilesScreen(
 
         Button(
             onClick = {
-                val created = runCatching { store.createProfile() }.getOrNull()
-                if (created != null) editing = created
+                viewModel.create().getOrNull()?.let { editing = it }
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(13.dp),
@@ -114,21 +107,14 @@ fun VoiceProfilesScreen(
     editing?.let { profile ->
         ProfileEditor(
             profile = profile,
-            builtIn = FormattingProfileStore.isBuiltIn(profile.id),
+            builtIn = viewModel.isBuiltIn(profile.id),
             onDismiss = { editing = null },
             onSave = {
-                store.save(it)
+                viewModel.save(it)
                 editing = null
             },
             onResetOrDelete = {
-                if (FormattingProfileStore.isBuiltIn(profile.id)) {
-                    store.reset(profile.id)
-                } else {
-                    store.delete(profile.id)
-                    if (activeId == profile.id) {
-                        scope.launch { preferences.setActiveProfileId("default") }
-                    }
-                }
+                viewModel.resetOrDelete(profile.id)
                 editing = null
             }
         )
@@ -212,8 +198,19 @@ private fun ProfileEditor(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                OutlinedTextField(name, { name = it }, label = { Text("Profile name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(description, { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    name,
+                    { name = it },
+                    label = { Text("Profile name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    description,
+                    { description = it },
+                    label = { Text("Description") },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     words,
                     { words = it },
@@ -229,8 +226,20 @@ private fun ProfileEditor(
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(prefix, { prefix = it }, label = { Text("Prefix") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(suffix, { suffix = it }, label = { Text("Suffix") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    prefix,
+                    { prefix = it },
+                    label = { Text("Prefix") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    suffix,
+                    { suffix = it },
+                    label = { Text("Suffix") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 ProfileToggle("Bullet prefix", bullets) { bullets = it }
                 ProfileToggle("Capitalize sentences", capitals) { capitals = it }
                 ProfileToggle("Add punctuation", punctuation) { punctuation = it }
