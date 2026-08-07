@@ -2,7 +2,9 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.SettingsRepository
+import com.example.data.repository.SpeechModelRepository
+import com.example.data.repository.SystemStatusRepository
 import com.example.speech.ModelDownloadState
 import com.example.speech.SpeechModels
 import kotlinx.coroutines.delay
@@ -23,11 +25,11 @@ data class SetupUiState(
         get() = imeEnabled && imeSelected && microphoneGranted && vosk.installed
 }
 
-class SetupViewModel(container: TakoFlowAppContainer) : ViewModel() {
-    private val settings = container.settings
-    private val models = container.models
-    private val systemStatus = container.systemStatus
-
+class SetupViewModel(
+    private val settings: SettingsRepository,
+    private val models: SpeechModelRepository,
+    private val systemStatus: SystemStatusRepository
+) : ViewModel() {
     val uiState: StateFlow<SetupUiState> = combine(
         systemStatus.status,
         models.voskState
