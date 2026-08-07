@@ -53,7 +53,13 @@ fun VoiceDictationScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val viewModel: DictationViewModel = takoFlowViewModel { DictationViewModel(container) }
+    val viewModel: DictationViewModel = takoFlowViewModel {
+        DictationViewModel(
+            settings = container.settings,
+            profiles = container.profiles,
+            speechEngine = container.createSpeechEngine()
+        )
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
