@@ -51,7 +51,12 @@ fun GeneralSettingsScreen(
     onRunSetupAgain: () -> Unit
 ) {
     val context = LocalContext.current
-    val viewModel: GeneralSettingsViewModel = takoFlowViewModel { GeneralSettingsViewModel(container) }
+    val viewModel: GeneralSettingsViewModel = takoFlowViewModel {
+        GeneralSettingsViewModel(
+            settings = container.settings,
+            systemStatus = container.systemStatus
+        )
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
