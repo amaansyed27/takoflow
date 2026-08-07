@@ -2,7 +2,8 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.SettingsRepository
+import com.example.data.repository.SpeechModelRepository
 import com.example.speech.ModelDownloadState
 import com.example.speech.SpeechModels
 import kotlinx.coroutines.delay
@@ -21,10 +22,10 @@ data class VoiceSettingsUiState(
     val whisper: ModelDownloadState = ModelDownloadState()
 )
 
-class VoiceSettingsViewModel(container: TakoFlowAppContainer) : ViewModel() {
-    private val settings = container.settings
-    private val models = container.models
-
+class VoiceSettingsViewModel(
+    private val settings: SettingsRepository,
+    private val models: SpeechModelRepository
+) : ViewModel() {
     private val formatting = combine(
         settings.inferenceModel,
         settings.punctuation,
