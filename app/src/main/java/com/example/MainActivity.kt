@@ -58,16 +58,23 @@ class MainActivity : ComponentActivity() {
                 val currentBackStack by navController.currentBackStackEntryAsState()
                 val currentRoute = currentBackStack?.destination?.route
                 var launchOverlayVisible by remember { mutableStateOf(true) }
+                var initialRoute by remember { mutableStateOf<String?>(null) }
 
                 LaunchedEffect(Unit) {
                     delay(650)
                     launchOverlayVisible = false
                 }
 
+                LaunchedEffect(setupCompleted) {
+                    if (initialRoute == null && setupCompleted != null) {
+                        initialRoute = if (setupCompleted == true) "dashboard" else "onboarding"
+                    }
+                }
+
                 val mainTabs = setOf("dashboard", "voice_profiles", "general_settings")
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (setupCompleted != null) {
+                    initialRoute?.let { startRoute ->
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
                             bottomBar = {
@@ -81,7 +88,7 @@ class MainActivity : ComponentActivity() {
                         ) { innerPadding ->
                             NavHost(
                                 navController = navController,
-                                startDestination = if (setupCompleted == true) "dashboard" else "onboarding",
+                                startDestination = startRoute,
                                 modifier = Modifier.padding(innerPadding),
                                 enterTransition = {
                                     fadeIn(tween(180)) + slideIntoContainer(
@@ -199,7 +206,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     BrandLaunchOverlay(
-                        visible = launchOverlayVisible || setupCompleted == null,
+                        visible = launchOverlayVisible || initialRoute == null,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
