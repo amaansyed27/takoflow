@@ -18,6 +18,36 @@ TakoFlow is a private, voice-first Android input method from Dawnlight Labs. It 
 - Companion app dictation testing with copy, share and clear actions
 - Local-only speech processing; network access is used only for user-initiated model downloads
 
+## Architecture
+
+The companion app follows MVVM with explicit dependency boundaries:
+
+```text
+Compose UI / navigation
+        ↓
+ViewModels + immutable UI state
+        ↓
+Repositories
+        ↓
+DataStore / profile storage / Android status / model manager
+        ↓
+Vosk / whisper.cpp / Android platform APIs
+```
+
+`TakoFlowAppContainer` is the composition root. It creates and owns application-scoped repositories, while each ViewModel receives only the dependencies it needs. Compose screens render `UiState`, forward user actions to ViewModels, and keep Android UI side effects such as permission launchers and system pickers at the UI boundary.
+
+The IME is intentionally service/controller based rather than forcing an `InputMethodService` into MVVM. It uses the same app container, repositories and speech engine as the companion app, so there is one settings/model/profile source of truth.
+
+New features should preserve these rules:
+
+- do not access DataStore, model storage or profile persistence directly from Compose screens
+- keep long-running work and mutable product state outside composables
+- expose observable state with `Flow`/`StateFlow`
+- inject only required dependencies into ViewModels/controllers
+- keep Android framework side effects at lifecycle-aware UI/service boundaries
+- prefer focused files and reusable components over feature-wide monoliths
+- add tests around derived state and domain behavior when adding new logic
+
 ## Speech engines
 
 ### Vosk
