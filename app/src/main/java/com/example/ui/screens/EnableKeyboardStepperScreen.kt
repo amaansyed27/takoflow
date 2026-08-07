@@ -60,7 +60,6 @@ fun EnableKeyboardStepperScreen(
     val context = LocalContext.current
     val viewModel: SetupViewModel = takoFlowViewModel {
         SetupViewModel(
-            settings = container.settings,
             models = container.models,
             systemStatus = container.systemStatus
         )
@@ -165,10 +164,7 @@ fun EnableKeyboardStepperScreen(
 
         Spacer(Modifier.height(24.dp))
         Button(
-            onClick = {
-                viewModel.selectDefaultModel()
-                onCompleteSetup()
-            },
+            onClick = onCompleteSetup,
             enabled = uiState.ready,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(15.dp),
