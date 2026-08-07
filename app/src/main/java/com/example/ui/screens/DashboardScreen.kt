@@ -1,9 +1,6 @@
 package com.example.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
@@ -28,24 +24,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import com.example.data.TakoFlowPreferences
-import com.example.service.ImeStatus
-import com.example.speech.FormattingProfileStore
-import com.example.speech.SpeechModelManager
-import com.example.speech.SpeechModels
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.core.TakoFlowAppContainer
 import com.example.ui.components.BrandHeader
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.ActiveGreen
@@ -53,11 +39,13 @@ import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.OnSurfaceDark
 import com.example.ui.theme.OnSurfaceVariantDark
 import com.example.ui.theme.PrimaryAmber
-import kotlinx.coroutines.delay
+import com.example.ui.viewmodel.DashboardUiState
+import com.example.ui.viewmodel.DashboardViewModel
+import com.example.ui.viewmodel.takoFlowViewModel
 
 @Composable
 fun DashboardScreen(
-    preferences: TakoFlowPreferences,
+    container: TakoFlowAppContainer,
     onNavigateToEnable: () -> Unit,
     onNavigateToVoiceSettings: () -> Unit,
     onNavigateToProfiles: () -> Unit,
@@ -65,39 +53,30 @@ fun DashboardScreen(
     onNavigateToSwitchingGuide: () -> Unit,
     onNavigateToDictation: () -> Unit
 ) {
-    val context = LocalContext.current
-    val modelManager = remember { SpeechModelManager.get(context) }
-    val profileStore = remember { FormattingProfileStore.get(context) }
-    val model by preferences.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
-    val profileId by preferences.activeProfileId.collectAsState(initial = "default")
-    val profiles by profileStore.profiles.collectAsState()
-    val voskState by modelManager.voskState.collectAsState()
-    val whisperState by modelManager.whisperState.collectAsState()
-    var imeEnabled by remember { mutableStateOf(false) }
-    var imeSelected by remember { mutableStateOf(false) }
-    var microphoneGranted by remember { mutableStateOf(false) }
+    val viewModel: DashboardViewModel = takoFlowViewModel { DashboardViewModel(container) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            imeEnabled = ImeStatus.isEnabled(context)
-            imeSelected = ImeStatus.isSelected(context)
-            microphoneGranted = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-            modelManager.refresh()
-            delay(1_000)
-        }
-    }
+    DashboardContent(
+        uiState = uiState,
+        onNavigateToEnable = onNavigateToEnable,
+        onNavigateToVoiceSettings = onNavigateToVoiceSettings,
+        onNavigateToProfiles = onNavigateToProfiles,
+        onNavigateToGeneralSettings = onNavigateToGeneralSettings,
+        onNavigateToSwitchingGuide = onNavigateToSwitchingGuide,
+        onNavigateToDictation = onNavigateToDictation
+    )
+}
 
-    val selectedModelReady = if (model == SpeechModels.WHISPER_TINY) {
-        whisperState.installed
-    } else {
-        voskState.installed
-    }
-    val ready = imeEnabled && imeSelected && microphoneGranted && selectedModelReady
-    val profileName = profiles.firstOrNull { it.id == profileId }?.name ?: "Default"
-
+@Composable
+private fun DashboardContent(
+    uiState: DashboardUiState,
+    onNavigateToEnable: () -> Unit,
+    onNavigateToVoiceSettings: () -> Unit,
+    onNavigateToProfiles: () -> Unit,
+    onNavigateToGeneralSettings: () -> Unit,
+    onNavigateToSwitchingGuide: () -> Unit,
+    onNavigateToDictation: () -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxSize().background(DarkBackground)
             .verticalScroll(rememberScrollState())
@@ -106,55 +85,66 @@ fun DashboardScreen(
         BrandHeader("TakoFlow", "Voice typing is ready when every check is green")
         Spacer(Modifier.height(22.dp))
 
-        GlassCard(modifier = Modifier.fillMaxWidth(), activeGlow = ready) {
+        GlassCard(modifier = Modifier.fillMaxWidth(), activeGlow = uiState.ready) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        if (ready) Icons.Default.CheckCircle else Icons.Default.Mic,
+                        if (uiState.ready) Icons.Default.CheckCircle else Icons.Default.Mic,
                         null,
-                        tint = if (ready) ActiveGreen else PrimaryAmber,
+                        tint = if (uiState.ready) ActiveGreen else PrimaryAmber,
                         modifier = Modifier.size(34.dp)
                     )
                     Spacer(Modifier.size(13.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            if (ready) "Ready to dictate" else "TakoFlow needs attention",
+                            if (uiState.ready) "Ready to dictate" else "TakoFlow needs attention",
                             color = OnSurfaceDark,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "$model · $profileName",
+                            "${uiState.model} · ${uiState.profileName}",
                             color = OnSurfaceVariantDark,
                             fontSize = 13.sp
                         )
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                StatusLine("Keyboard enabled", imeEnabled)
-                StatusLine("TakoFlow selected", imeSelected)
-                StatusLine("Microphone allowed", microphoneGranted)
-                StatusLine("Selected model installed", selectedModelReady)
+                StatusLine("Keyboard enabled", uiState.imeEnabled)
+                StatusLine("TakoFlow selected", uiState.imeSelected)
+                StatusLine("Microphone allowed", uiState.microphoneGranted)
+                StatusLine("Selected model installed", uiState.selectedModelReady)
                 Spacer(Modifier.height(16.dp))
                 Button(
-                    onClick = if (ready) onNavigateToDictation else onNavigateToEnable,
+                    onClick = if (uiState.ready) onNavigateToDictation else onNavigateToEnable,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(13.dp),
                     colors = ButtonDefaults.buttonColors(PrimaryAmber, DarkBackground)
                 ) {
-                    Text(if (ready) "Test dictation" else "Finish setup", fontWeight = FontWeight.Bold)
+                    Text(if (uiState.ready) "Test dictation" else "Finish setup", fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         Spacer(Modifier.height(20.dp))
-        Text("QUICK ACTIONS", color = OnSurfaceVariantDark, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text(
+            "QUICK ACTIONS",
+            color = OnSurfaceVariantDark,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.4.sp
+        )
         Spacer(Modifier.height(9.dp))
-        ActionCard(Icons.Default.Mic, "Voice engine", model, onNavigateToVoiceSettings)
+        ActionCard(Icons.Default.Mic, "Voice engine", uiState.model, onNavigateToVoiceSettings)
         Spacer(Modifier.height(10.dp))
-        ActionCard(Icons.Default.Style, "Formatting profiles", profileName, onNavigateToProfiles)
+        ActionCard(Icons.Default.Style, "Formatting profiles", uiState.profileName, onNavigateToProfiles)
         Spacer(Modifier.height(10.dp))
-        ActionCard(Icons.Default.SwapHoriz, "Switching keyboards", "TakoFlow ↔ normal keyboard", onNavigateToSwitchingGuide)
+        ActionCard(
+            Icons.Default.SwapHoriz,
+            "Switching keyboards",
+            "TakoFlow ↔ normal keyboard",
+            onNavigateToSwitchingGuide
+        )
         Spacer(Modifier.height(10.dp))
         ActionCard(Icons.Default.Settings, "Settings", "Feedback, setup and app details", onNavigateToGeneralSettings)
         Spacer(Modifier.height(24.dp))
