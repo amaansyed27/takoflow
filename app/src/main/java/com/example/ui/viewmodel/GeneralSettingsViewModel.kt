@@ -21,6 +21,13 @@ data class GeneralSettingsUiState(
     val imeSelected: Boolean = false
 )
 
+private data class VoicePanelSettings(
+    val autoStart: Boolean,
+    val model: String,
+    val sound: Boolean,
+    val vibration: Boolean
+)
+
 class GeneralSettingsViewModel(container: TakoFlowAppContainer) : ViewModel() {
     private val settings = container.settings
     private val systemStatus = container.systemStatus
@@ -31,18 +38,18 @@ class GeneralSettingsViewModel(container: TakoFlowAppContainer) : ViewModel() {
         settings.soundFeedback,
         settings.vibrationFeedback
     ) { autoStart, model, sound, vibration ->
-        listOf(autoStart.toString(), model, sound.toString(), vibration.toString())
+        VoicePanelSettings(autoStart, model, sound, vibration)
     }
 
     val uiState: StateFlow<GeneralSettingsUiState> = combine(
         panelSettings,
         systemStatus.status
-    ) { values, status ->
+    ) { panel, status ->
         GeneralSettingsUiState(
-            autoStart = values[0].toBoolean(),
-            model = values[1],
-            sound = values[2].toBoolean(),
-            vibration = values[3].toBoolean(),
+            autoStart = panel.autoStart,
+            model = panel.model,
+            sound = panel.sound,
+            vibration = panel.vibration,
             imeEnabled = status.imeEnabled,
             imeSelected = status.imeSelected
         )
