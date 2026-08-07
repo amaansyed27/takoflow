@@ -25,6 +25,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.core.TakoFlowAppContainer
+import com.example.speech.SpeechModels
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BrandLaunchOverlay
 import com.example.ui.screens.DashboardScreen
@@ -116,6 +117,7 @@ class MainActivity : ComponentActivity() {
                                     container = container,
                                     onBack = { navController.popBackStack() },
                                     onCompleteSetup = {
+                                        appViewModel.setInferenceModel(SpeechModels.VOSK)
                                         navController.navigate("switching_guide_setup") {
                                             popUpTo("enable_keyboard") { inclusive = true }
                                             launchSingleTop = true
@@ -167,6 +169,7 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("switching_guide")
                                     },
                                     onRunSetupAgain = {
+                                        appViewModel.setSetupCompleted(false)
                                         navController.navigate("setup") {
                                             popUpTo(navController.graph.id) { inclusive = true }
                                         }
