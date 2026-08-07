@@ -53,7 +53,14 @@ fun DashboardScreen(
     onNavigateToSwitchingGuide: () -> Unit,
     onNavigateToDictation: () -> Unit
 ) {
-    val viewModel: DashboardViewModel = takoFlowViewModel { DashboardViewModel(container) }
+    val viewModel: DashboardViewModel = takoFlowViewModel {
+        DashboardViewModel(
+            settings = container.settings,
+            models = container.models,
+            profiles = container.profiles,
+            systemStatus = container.systemStatus
+        )
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     DashboardContent(
