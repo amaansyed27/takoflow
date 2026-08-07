@@ -2,7 +2,8 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.FormattingProfileRepository
+import com.example.data.repository.SettingsRepository
 import com.example.speech.FormattingProfile
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,10 +16,10 @@ data class ProfilesUiState(
     val activeId: String = "default"
 )
 
-class ProfilesViewModel(container: TakoFlowAppContainer) : ViewModel() {
-    private val settings = container.settings
-    private val profilesRepository = container.profiles
-
+class ProfilesViewModel(
+    private val settings: SettingsRepository,
+    private val profilesRepository: FormattingProfileRepository
+) : ViewModel() {
     val uiState: StateFlow<ProfilesUiState> = combine(
         profilesRepository.profiles,
         settings.activeProfileId
