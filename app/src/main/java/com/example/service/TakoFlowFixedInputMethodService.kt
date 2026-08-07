@@ -22,8 +22,9 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.example.data.TakoFlowPreferences
-import com.example.speech.FormattingProfileStore
+import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.FormattingProfileRepository
+import com.example.data.repository.SettingsRepository
 import com.example.speech.LocalSpeechEngine
 import com.example.speech.SpeechModels
 import com.example.speech.SpeechState
@@ -41,9 +42,9 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateController.savedStateRegistry
 
-    private lateinit var preferences: TakoFlowPreferences
+    private lateinit var settings: SettingsRepository
+    private lateinit var profiles: FormattingProfileRepository
     private lateinit var speechEngine: LocalSpeechEngine
-    private lateinit var profileStore: FormattingProfileStore
     private val sensitiveField = MutableStateFlow(false)
 
     override fun onCreate() {
@@ -51,9 +52,11 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
         savedStateController.performAttach()
         savedStateController.performRestore(null)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
-        preferences = TakoFlowPreferences(applicationContext)
-        profileStore = FormattingProfileStore.get(applicationContext)
-        speechEngine = LocalSpeechEngine(applicationContext)
+
+        val container = TakoFlowAppContainer.get(applicationContext)
+        settings = container.settings
+        profiles = container.profiles
+        speechEngine = container.createSpeechEngine()
         installWindowTreeOwners()
     }
 
@@ -72,19 +75,19 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 MyApplicationTheme {
-                    val model by preferences.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
-                    val punctuation by preferences.punctuation.collectAsState(initial = true)
-                    val autoCaps by preferences.autoCapitalization.collectAsState(initial = true)
-                    val sound by preferences.soundFeedback.collectAsState(initial = true)
-                    val vibration by preferences.vibrationFeedback.collectAsState(initial = false)
-                    val profileId by preferences.activeProfileId.collectAsState(initial = "default")
-                    val autoStart by preferences.autoStartListening.collectAsState(initial = false)
-                    val profiles by profileStore.profiles.collectAsState()
+                    val model by settings.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
+                    val punctuation by settings.punctuation.collectAsState(initial = true)
+                    val autoCaps by settings.autoCapitalization.collectAsState(initial = true)
+                    val sound by settings.soundFeedback.collectAsState(initial = true)
+                    val vibration by settings.vibrationFeedback.collectAsState(initial = false)
+                    val profileId by settings.activeProfileId.collectAsState(initial = "default")
+                    val autoStart by settings.autoStartListening.collectAsState(initial = false)
+                    val profileList by profiles.profiles.collectAsState()
                     val speechState by speechEngine.speechState.collectAsState()
                     val rmsDb by speechEngine.rmsDb.collectAsState()
                     val isSensitive by sensitiveField.collectAsState()
-                    val profileName = profiles.firstOrNull { it.id == profileId }?.name
-                        ?: FormattingProfileStore.builtInProfile(profileId).name
+                    val profileName = profileList.firstOrNull { it.id == profileId }?.name
+                        ?: profiles.builtInProfile(profileId).name
 
                     LaunchedEffect(model, punctuation, autoCaps, sound, vibration, profileId) {
                         speechEngine.activeModel = model
@@ -117,15 +120,12 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
                             profileName = profileName,
                             sensitiveField = isSensitive,
                             onMicClick = {
-                                val recording = speechState is SpeechState.Listening ||
-                                    (model == SpeechModels.VOSK && speechState is SpeechState.Processing)
-                                if (recording) {
-                                    speechEngine.stopListening()
-                                } else if (
-                                    !isSensitive &&
-                                    (speechState is SpeechState.Idle || speechState is SpeechState.Error)
-                                ) {
-                                    speechEngine.startListening()
+                                when {
+                                    isSensitive -> Unit
+                                    speechState is SpeechState.Listening -> speechEngine.stopListening()
+                                    speechState is SpeechState.Idle || speechState is SpeechState.Error -> {
+                                        speechEngine.startListening()
+                                    }
                                 }
                             },
                             onSwitchKeyboard = ::switchBackToTypingKeyboard,
@@ -153,7 +153,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
 
     @Suppress("DEPRECATION")
     private fun switchBackToTypingKeyboard() {
-        speechEngine.stopListening()
+        speechEngine.cancelListening()
         val manager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         val switched = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             switchToPreviousInputMethod() || switchToNextInputMethod(false)
@@ -166,7 +166,9 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
 
     override fun onStartInputView(attribute: EditorInfo?, restarting: Boolean) {
         installWindowTreeOwners()
-        sensitiveField.value = isSensitiveField(attribute)
+        val sensitive = isSensitiveField(attribute)
+        sensitiveField.value = sensitive
+        if (sensitive) speechEngine.cancelListening()
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
         super.onStartInputView(attribute, restarting)
     }
@@ -178,7 +180,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
-        speechEngine.stopListening()
+        speechEngine.cancelListening()
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
         super.onFinishInputView(finishingInput)
     }
