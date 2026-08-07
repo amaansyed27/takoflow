@@ -2,7 +2,8 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.FormattingProfileRepository
+import com.example.data.repository.SettingsRepository
 import com.example.speech.LocalSpeechEngine
 import com.example.speech.SpeechModels
 import com.example.speech.SpeechState
@@ -35,10 +36,11 @@ private data class DictationConfiguration(
     val profileName: String
 )
 
-class DictationViewModel(container: TakoFlowAppContainer) : ViewModel() {
-    private val settings = container.settings
-    private val profiles = container.profiles
-    private val speechEngine: LocalSpeechEngine = container.createSpeechEngine()
+class DictationViewModel(
+    private val settings: SettingsRepository,
+    private val profiles: FormattingProfileRepository,
+    private val speechEngine: LocalSpeechEngine
+) : ViewModel() {
     private val text = MutableStateFlow("")
 
     private val engineSettings = combine(
