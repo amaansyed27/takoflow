@@ -2,7 +2,8 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.TakoFlowAppContainer
+import com.example.data.repository.SettingsRepository
+import com.example.data.repository.SystemStatusRepository
 import com.example.speech.SpeechModels
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,10 +29,10 @@ private data class VoicePanelSettings(
     val vibration: Boolean
 )
 
-class GeneralSettingsViewModel(container: TakoFlowAppContainer) : ViewModel() {
-    private val settings = container.settings
-    private val systemStatus = container.systemStatus
-
+class GeneralSettingsViewModel(
+    private val settings: SettingsRepository,
+    private val systemStatus: SystemStatusRepository
+) : ViewModel() {
     private val panelSettings = combine(
         settings.autoStartListening,
         settings.inferenceModel,
