@@ -33,8 +33,6 @@ object TextQualityProcessor {
     private val grammarCorrections = linkedMapOf(
         "im" to "I'm",
         "ive" to "I've",
-        "ill" to "I'll",
-        "id" to "I'd",
         "dont" to "don't",
         "doesnt" to "doesn't",
         "didnt" to "didn't",
@@ -62,7 +60,7 @@ object TextQualityProcessor {
 
     private val questionStarters = setOf(
         "who", "what", "when", "where", "why", "how", "which",
-        "can", "could", "would", "will", "should", "may",
+        "can", "could", "would", "will", "should",
         "do", "does", "did", "is", "are", "am", "was", "were",
         "have", "has", "had"
     )
