@@ -28,6 +28,7 @@ import com.example.data.repository.SettingsRepository
 import com.example.speech.LocalSpeechEngine
 import com.example.speech.SpeechModels
 import com.example.speech.SpeechState
+import com.example.speech.WhisperModes
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.SurfaceContainerLowest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +47,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
     private lateinit var profiles: FormattingProfileRepository
     private lateinit var speechEngine: LocalSpeechEngine
     private val sensitiveField = MutableStateFlow(false)
+    private var hasSpeechComposition = false
 
     override fun onCreate() {
         super.onCreate()
@@ -76,8 +78,11 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
             setContent {
                 MyApplicationTheme {
                     val model by settings.inferenceModel.collectAsState(initial = SpeechModels.VOSK)
+                    val whisperMode by settings.whisperMode.collectAsState(initial = WhisperModes.BATCH)
                     val punctuation by settings.punctuation.collectAsState(initial = true)
                     val autoCaps by settings.autoCapitalization.collectAsState(initial = true)
+                    val grammar by settings.grammarCorrection.collectAsState(initial = true)
+                    val spelling by settings.spellCorrection.collectAsState(initial = true)
                     val sound by settings.soundFeedback.collectAsState(initial = true)
                     val vibration by settings.vibrationFeedback.collectAsState(initial = false)
                     val profileId by settings.activeProfileId.collectAsState(initial = "default")
@@ -89,10 +94,23 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
                     val profileName = profileList.firstOrNull { it.id == profileId }?.name
                         ?: profiles.builtInProfile(profileId).name
 
-                    LaunchedEffect(model, punctuation, autoCaps, sound, vibration, profileId) {
+                    LaunchedEffect(
+                        model,
+                        whisperMode,
+                        punctuation,
+                        autoCaps,
+                        grammar,
+                        spelling,
+                        sound,
+                        vibration,
+                        profileId
+                    ) {
                         speechEngine.activeModel = model
+                        speechEngine.whisperMode = whisperMode
                         speechEngine.autoPunctuation = punctuation
                         speechEngine.autoCapitalization = autoCaps
+                        speechEngine.grammarCorrectionEnabled = grammar
+                        speechEngine.spellCorrectionEnabled = spelling
                         speechEngine.soundFeedbackEnabled = sound
                         speechEngine.vibrationFeedbackEnabled = vibration
                         speechEngine.activeProfile = profileId
@@ -104,11 +122,24 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
                         }
                     }
 
-                    LaunchedEffect(speechState) {
-                        val state = speechState
-                        if (state is SpeechState.Success) {
-                            currentInputConnection?.commitText(state.recognizedText + " ", 1)
-                            speechEngine.acknowledgeResult()
+                    LaunchedEffect(speechState, isSensitive) {
+                        when (val state = speechState) {
+                            is SpeechState.Listening -> {
+                                if (!isSensitive && state.partialText.isNotBlank()) {
+                                    currentInputConnection?.setComposingText(state.partialText, 1)
+                                    hasSpeechComposition = true
+                                }
+                            }
+                            is SpeechState.Success -> {
+                                currentInputConnection?.commitText(state.recognizedText + " ", 1)
+                                currentInputConnection?.finishComposingText()
+                                hasSpeechComposition = false
+                                speechEngine.acknowledgeResult()
+                            }
+                            is SpeechState.Idle, is SpeechState.Error -> {
+                                clearSpeechComposition(removeText = true)
+                            }
+                            is SpeechState.Preparing, is SpeechState.Processing -> Unit
                         }
                     }
 
@@ -129,14 +160,36 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
                                 }
                             },
                             onSwitchKeyboard = ::switchBackToTypingKeyboard,
-                            onSpace = { currentInputConnection?.commitText(" ", 1) },
-                            onDelete = { currentInputConnection?.deleteSurroundingText(1, 0) },
-                            onEnter = ::sendEnter
+                            onSpace = {
+                                finishSpeechComposition()
+                                currentInputConnection?.commitText(" ", 1)
+                            },
+                            onDelete = {
+                                finishSpeechComposition()
+                                currentInputConnection?.deleteSurroundingText(1, 0)
+                            },
+                            onEnter = {
+                                finishSpeechComposition()
+                                sendEnter()
+                            }
                         )
                     }
                 }
             }
         }
+    }
+
+    private fun finishSpeechComposition() {
+        if (!hasSpeechComposition) return
+        currentInputConnection?.finishComposingText()
+        hasSpeechComposition = false
+    }
+
+    private fun clearSpeechComposition(removeText: Boolean) {
+        if (!hasSpeechComposition) return
+        if (removeText) currentInputConnection?.setComposingText("", 1)
+        currentInputConnection?.finishComposingText()
+        hasSpeechComposition = false
     }
 
     private fun sendEnter() {
@@ -154,6 +207,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
     @Suppress("DEPRECATION")
     private fun switchBackToTypingKeyboard() {
         speechEngine.cancelListening()
+        clearSpeechComposition(removeText = true)
         val manager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         val switched = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             switchToPreviousInputMethod() || switchToNextInputMethod(false)
@@ -166,6 +220,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
 
     override fun onStartInputView(attribute: EditorInfo?, restarting: Boolean) {
         installWindowTreeOwners()
+        clearSpeechComposition(removeText = true)
         val sensitive = isSensitiveField(attribute)
         sensitiveField.value = sensitive
         if (sensitive) speechEngine.cancelListening()
@@ -181,6 +236,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
 
     override fun onFinishInputView(finishingInput: Boolean) {
         speechEngine.cancelListening()
+        clearSpeechComposition(removeText = true)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
         super.onFinishInputView(finishingInput)
     }
@@ -188,6 +244,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
     override fun onEvaluateFullscreenMode(): Boolean = false
 
     override fun onDestroy() {
+        clearSpeechComposition(removeText = true)
         speechEngine.destroy()
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         super.onDestroy()
