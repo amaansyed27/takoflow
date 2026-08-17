@@ -10,19 +10,80 @@ object DictationTextFormatter {
         raw: String,
         autoCapitalization: Boolean,
         autoPunctuation: Boolean,
-        profile: String
+        profile: String,
+        grammarCorrection: Boolean = true,
+        spellCorrection: Boolean = true
     ): String = format(
         raw = raw,
         autoCapitalization = autoCapitalization,
         autoPunctuation = autoPunctuation,
-        profile = FormattingProfileStore.currentProfile(profile)
+        profile = FormattingProfileStore.currentProfile(profile),
+        grammarCorrection = grammarCorrection,
+        spellCorrection = spellCorrection
     )
 
     fun format(
         raw: String,
         autoCapitalization: Boolean,
         autoPunctuation: Boolean,
-        profile: FormattingProfile
+        profile: FormattingProfile,
+        grammarCorrection: Boolean = true,
+        spellCorrection: Boolean = true
+    ): String {
+        var result = prepareCore(
+            raw = raw,
+            profile = profile,
+            grammarCorrection = grammarCorrection,
+            spellCorrection = spellCorrection
+        )
+
+        if (autoCapitalization && profile.capitalizeSentences && result.isNotEmpty()) {
+            result = TextQualityProcessor.capitalizeSentences(result)
+        }
+
+        if (
+            autoPunctuation && profile.addPunctuation && result.isNotEmpty() &&
+            result.last() !in charArrayOf('.', '?', '!', ':', ';')
+        ) {
+            result += TextQualityProcessor.terminalPunctuation(result, grammarCorrection)
+        }
+
+        if (profile.bulletPrefix && result.isNotEmpty()) {
+            result = "• $result"
+        }
+
+        return buildString {
+            if (profile.prefix.isNotBlank()) append(profile.prefix.trimEnd()).append(' ')
+            append(result)
+            if (profile.suffix.isNotBlank()) append(' ').append(profile.suffix.trimStart())
+        }.trim()
+    }
+
+    fun formatPartial(
+        raw: String,
+        profile: String,
+        autoCapitalization: Boolean,
+        grammarCorrection: Boolean,
+        spellCorrection: Boolean
+    ): String {
+        val resolvedProfile = FormattingProfileStore.currentProfile(profile)
+        var result = prepareCore(
+            raw = raw,
+            profile = resolvedProfile,
+            grammarCorrection = grammarCorrection,
+            spellCorrection = spellCorrection
+        )
+        if (autoCapitalization && resolvedProfile.capitalizeSentences && result.isNotEmpty()) {
+            result = TextQualityProcessor.capitalizeSentences(result)
+        }
+        return result
+    }
+
+    private fun prepareCore(
+        raw: String,
+        profile: FormattingProfile,
+        grammarCorrection: Boolean,
+        spellCorrection: Boolean
     ): String {
         var result = raw.trim().replace(Regex("\\s+"), " ")
 
@@ -37,30 +98,12 @@ object DictationTextFormatter {
                 result = pattern.replace(result, replacement)
             }
 
-        result = applyPreferredSpellings(result, profile.customWords)
-
-        if (autoCapitalization && profile.capitalizeSentences && result.isNotEmpty()) {
-            result = result.replaceFirstChar {
-                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-            }
-        }
-
-        if (
-            autoPunctuation && profile.addPunctuation && result.isNotEmpty() &&
-            result.last() !in charArrayOf('.', '?', '!', ':', ';')
-        ) {
-            result += "."
-        }
-
-        if (profile.bulletPrefix && result.isNotEmpty()) {
-            result = "• $result"
-        }
-
-        return buildString {
-            if (profile.prefix.isNotBlank()) append(profile.prefix.trimEnd()).append(' ')
-            append(result)
-            if (profile.suffix.isNotBlank()) append(' ').append(profile.suffix.trimStart())
-        }.trim()
+        result = TextQualityProcessor.clean(
+            text = result,
+            spellCorrection = spellCorrection,
+            grammarCorrection = grammarCorrection
+        )
+        return applyPreferredSpellings(result, profile.customWords)
     }
 
     private fun applyPreferredSpellings(text: String, preferredWords: Set<String>): String {
