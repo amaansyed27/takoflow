@@ -92,8 +92,6 @@ object TextQualityProcessor {
             output.append(next)
             if (character == '.' || character == '?' || character == '!') {
                 sentenceStart = true
-            } else if (!character.isWhitespace() && sentenceStart && character.isLetter()) {
-                sentenceStart = false
             }
         }
         return output.toString()
@@ -151,8 +149,8 @@ object TextQualityProcessor {
 
     private fun normalizePunctuationSpacing(text: String): String =
         text
-            .replace(Regex("\\s+([,.;!?])"), "$1")
-            .replace(Regex("([,.;!?])(?=[\\p{L}\\p{N}])"), "$1 ")
+            .replace(Regex("\\s+([,.;!?])"), "\$1")
+            .replace(Regex("([,.;!?])(?=[\\p{L}\\p{N}])"), "\$1 ")
             .replace(Regex(" {2,}"), " ")
             .trim()
 }
