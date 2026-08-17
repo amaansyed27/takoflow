@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.speech.SpeechModels
+import com.example.speech.WhisperModes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,8 +16,11 @@ class TakoFlowPreferences(private val context: Context) {
     companion object {
         private val KEY_AUTO_START = booleanPreferencesKey("auto_start_listening")
         private val KEY_INFERENCE_MODEL = stringPreferencesKey("inference_model")
+        private val KEY_WHISPER_MODE = stringPreferencesKey("whisper_mode")
         private val KEY_PUNCTUATION = booleanPreferencesKey("punctuation")
         private val KEY_AUTO_CAPS = booleanPreferencesKey("auto_capitalization")
+        private val KEY_GRAMMAR_CORRECTION = booleanPreferencesKey("grammar_correction")
+        private val KEY_SPELL_CORRECTION = booleanPreferencesKey("spell_correction")
         private val KEY_SOUND_FEEDBACK = booleanPreferencesKey("sound_feedback")
         private val KEY_VIBRATION_FEEDBACK = booleanPreferencesKey("vibration_feedback")
         private val KEY_ACTIVE_PROFILE_ID = stringPreferencesKey("active_profile_id")
@@ -29,11 +33,20 @@ class TakoFlowPreferences(private val context: Context) {
     val inferenceModel: Flow<String> =
         context.dataStore.data.map { it[KEY_INFERENCE_MODEL] ?: SpeechModels.VOSK }
 
+    val whisperMode: Flow<String> =
+        context.dataStore.data.map { WhisperModes.normalize(it[KEY_WHISPER_MODE] ?: WhisperModes.BATCH) }
+
     val punctuation: Flow<Boolean> =
         context.dataStore.data.map { it[KEY_PUNCTUATION] ?: true }
 
     val autoCapitalization: Flow<Boolean> =
         context.dataStore.data.map { it[KEY_AUTO_CAPS] ?: true }
+
+    val grammarCorrection: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_GRAMMAR_CORRECTION] ?: true }
+
+    val spellCorrection: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_SPELL_CORRECTION] ?: true }
 
     val soundFeedback: Flow<Boolean> =
         context.dataStore.data.map { it[KEY_SOUND_FEEDBACK] ?: true }
@@ -55,12 +68,24 @@ class TakoFlowPreferences(private val context: Context) {
         context.dataStore.edit { it[KEY_INFERENCE_MODEL] = value }
     }
 
+    suspend fun setWhisperMode(value: String) {
+        context.dataStore.edit { it[KEY_WHISPER_MODE] = WhisperModes.normalize(value) }
+    }
+
     suspend fun setPunctuation(value: Boolean) {
         context.dataStore.edit { it[KEY_PUNCTUATION] = value }
     }
 
     suspend fun setAutoCapitalization(value: Boolean) {
         context.dataStore.edit { it[KEY_AUTO_CAPS] = value }
+    }
+
+    suspend fun setGrammarCorrection(value: Boolean) {
+        context.dataStore.edit { it[KEY_GRAMMAR_CORRECTION] = value }
+    }
+
+    suspend fun setSpellCorrection(value: Boolean) {
+        context.dataStore.edit { it[KEY_SPELL_CORRECTION] = value }
     }
 
     suspend fun setSoundFeedback(value: Boolean) {
