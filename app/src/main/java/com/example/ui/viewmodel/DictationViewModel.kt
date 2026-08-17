@@ -7,6 +7,7 @@ import com.example.data.repository.SettingsRepository
 import com.example.speech.LocalSpeechEngine
 import com.example.speech.SpeechModels
 import com.example.speech.SpeechState
+import com.example.speech.WhisperModes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,16 +19,32 @@ data class DictationUiState(
     val speechState: SpeechState = SpeechState.Idle,
     val rmsDb: Float = 0f,
     val model: String = SpeechModels.VOSK,
+    val whisperMode: String = WhisperModes.BATCH,
     val profileName: String = "Default",
     val text: String = ""
 )
 
-private data class EngineSettings(
+private data class RecognitionSettings(
     val model: String,
+    val whisperMode: String
+)
+
+private data class CorrectionSettings(
     val punctuation: Boolean,
     val autoCapitalization: Boolean,
+    val grammar: Boolean,
+    val spelling: Boolean
+)
+
+private data class FeedbackSettings(
     val sound: Boolean,
     val vibration: Boolean
+)
+
+private data class EngineSettings(
+    val recognition: RecognitionSettings,
+    val corrections: CorrectionSettings,
+    val feedback: FeedbackSettings
 )
 
 private data class DictationConfiguration(
@@ -43,14 +60,31 @@ class DictationViewModel(
 ) : ViewModel() {
     private val text = MutableStateFlow("")
 
-    private val engineSettings = combine(
+    private val recognitionSettings = combine(
         settings.inferenceModel,
+        settings.whisperMode
+    ) { model, whisperMode -> RecognitionSettings(model, whisperMode) }
+
+    private val correctionSettings = combine(
         settings.punctuation,
         settings.autoCapitalization,
+        settings.grammarCorrection,
+        settings.spellCorrection
+    ) { punctuation, caps, grammar, spelling ->
+        CorrectionSettings(punctuation, caps, grammar, spelling)
+    }
+
+    private val feedbackSettings = combine(
         settings.soundFeedback,
         settings.vibrationFeedback
-    ) { model, punctuation, caps, sound, vibration ->
-        EngineSettings(model, punctuation, caps, sound, vibration)
+    ) { sound, vibration -> FeedbackSettings(sound, vibration) }
+
+    private val engineSettings = combine(
+        recognitionSettings,
+        correctionSettings,
+        feedbackSettings
+    ) { recognition, corrections, feedback ->
+        EngineSettings(recognition, corrections, feedback)
     }
 
     private val configuration = combine(
@@ -74,7 +108,8 @@ class DictationViewModel(
         DictationUiState(
             speechState = speechState,
             rmsDb = rmsDb,
-            model = config.engine.model,
+            model = config.engine.recognition.model,
+            whisperMode = config.engine.recognition.whisperMode,
             profileName = config.profileName,
             text = currentText
         )
@@ -87,11 +122,14 @@ class DictationViewModel(
     init {
         viewModelScope.launch {
             configuration.collect { config ->
-                speechEngine.activeModel = config.engine.model
-                speechEngine.autoPunctuation = config.engine.punctuation
-                speechEngine.autoCapitalization = config.engine.autoCapitalization
-                speechEngine.soundFeedbackEnabled = config.engine.sound
-                speechEngine.vibrationFeedbackEnabled = config.engine.vibration
+                speechEngine.activeModel = config.engine.recognition.model
+                speechEngine.whisperMode = config.engine.recognition.whisperMode
+                speechEngine.autoPunctuation = config.engine.corrections.punctuation
+                speechEngine.autoCapitalization = config.engine.corrections.autoCapitalization
+                speechEngine.grammarCorrectionEnabled = config.engine.corrections.grammar
+                speechEngine.spellCorrectionEnabled = config.engine.corrections.spelling
+                speechEngine.soundFeedbackEnabled = config.engine.feedback.sound
+                speechEngine.vibrationFeedbackEnabled = config.engine.feedback.vibration
                 speechEngine.activeProfile = config.profileId
             }
         }
