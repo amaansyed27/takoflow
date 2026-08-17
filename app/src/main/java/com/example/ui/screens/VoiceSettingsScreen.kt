@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.TakoFlowAppContainer
 import com.example.speech.ModelDownloadState
 import com.example.speech.SpeechModels
+import com.example.speech.WhisperModes
 import com.example.ui.components.BrandHeader
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.ActiveGreen
@@ -64,12 +65,12 @@ fun VoiceSettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        BrandHeader("Voice engine", "Choose and manage on-device models", onBack = onBack)
+        BrandHeader("Voice engine", "Choose and tune on-device speech", onBack = onBack)
         Spacer(Modifier.height(22.dp))
 
         ModelCard(
             title = "Vosk Small English",
-            subtitle = "Default · streaming · low latency · about 40 MB",
+            subtitle = "Default · true streaming · low latency · about 40 MB",
             state = uiState.vosk,
             selected = uiState.selectedModel == SpeechModels.VOSK,
             onSelect = { viewModel.selectModel(SpeechModels.VOSK) },
@@ -80,7 +81,7 @@ fun VoiceSettingsScreen(
         Spacer(Modifier.height(12.dp))
         ModelCard(
             title = "Whisper Tiny English",
-            subtitle = "Optional · higher accuracy · processes after recording · about 75 MB",
+            subtitle = "Optional · higher accuracy · batch or live · about 75 MB",
             state = uiState.whisper,
             selected = uiState.selectedModel == SpeechModels.WHISPER_TINY,
             onSelect = { viewModel.selectModel(SpeechModels.WHISPER_TINY) },
@@ -89,40 +90,116 @@ fun VoiceSettingsScreen(
             onDelete = viewModel::deleteWhisper
         )
 
+        if (uiState.whisper.installed) {
+            Spacer(Modifier.height(22.dp))
+            SectionLabel("WHISPER TRANSCRIPTION")
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        WhisperModeButton(
+                            label = "Batch",
+                            selected = uiState.whisperMode == WhisperModes.BATCH,
+                            modifier = Modifier.weight(1f),
+                            onClick = { viewModel.setWhisperMode(WhisperModes.BATCH) }
+                        )
+                        WhisperModeButton(
+                            label = "Live",
+                            selected = uiState.whisperMode == WhisperModes.LIVE,
+                            modifier = Modifier.weight(1f),
+                            onClick = { viewModel.setWhisperMode(WhisperModes.LIVE) }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        if (uiState.whisperMode == WhisperModes.LIVE) {
+                            "Live mode repeatedly transcribes the in-progress recording so text can update while you speak. It uses more CPU than Batch mode."
+                        } else {
+                            "Batch mode records first and runs one final transcription after you stop. It is the most stable and efficient Whisper mode."
+                        },
+                        color = OnSurfaceVariantDark,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+
         Spacer(Modifier.height(22.dp))
-        Text(
-            "TEXT FORMATTING",
-            color = OnSurfaceVariantDark,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.4.sp
-        )
-        Spacer(Modifier.height(8.dp))
+        SectionLabel("TEXT QUALITY")
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 VoiceToggle(
                     "Automatic punctuation",
-                    "Add sentence-ending punctuation when a profile allows it",
+                    "Choose a sensible sentence ending when a profile allows it",
                     uiState.punctuation,
                     viewModel::setPunctuation
                 )
                 VoiceToggle(
                     "Automatic capitalization",
-                    "Capitalize the beginning of completed dictation",
+                    "Capitalize sentence starts in completed dictation",
                     uiState.autoCapitalization,
                     viewModel::setAutoCapitalization
+                )
+                VoiceToggle(
+                    "Grammar cleanup",
+                    "Fix common contractions, duplicate words and obvious question endings",
+                    uiState.grammarCorrection,
+                    viewModel::setGrammarCorrection
+                )
+                VoiceToggle(
+                    "Spell correction",
+                    "Conservatively correct common misspellings and profile-preferred spellings",
+                    uiState.spellCorrection,
+                    viewModel::setSpellCorrection
                 )
             }
         }
 
         Spacer(Modifier.height(18.dp))
         Text(
-            "Both engines run locally. Whisper can take longer because it processes the complete recording after you stop.",
+            "All recognition and correction runs locally. Whisper Live trades battery and CPU for lower visible latency; Batch performs one transcription after recording.",
             color = OnSurfaceVariantDark,
             fontSize = 12.sp,
             lineHeight = 18.sp
         )
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        color = OnSurfaceVariantDark,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.4.sp
+    )
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun WhisperModeButton(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            modifier = modifier,
+            colors = ButtonDefaults.buttonColors(PrimaryAmber, DarkBackground)
+        ) {
+            Text(label, fontWeight = FontWeight.Bold)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Text(label)
+        }
     }
 }
 
