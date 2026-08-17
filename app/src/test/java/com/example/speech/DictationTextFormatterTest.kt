@@ -81,4 +81,48 @@ class DictationTextFormatterTest {
             )
         )
     }
+
+    @Test
+    fun grammarAndSpellingCleanupAreConservative() {
+        assertEquals(
+            "Can you send the report?",
+            DictationTextFormatter.format(
+                raw = "can you send teh report",
+                autoCapitalization = true,
+                autoPunctuation = true,
+                profile = FormattingProfileStore.builtInProfile("default"),
+                grammarCorrection = true,
+                spellCorrection = true
+            )
+        )
+    }
+
+    @Test
+    fun grammarCleanupFixesContractionsAndRepeatedWords() {
+        assertEquals(
+            "I'm going tomorrow.",
+            DictationTextFormatter.format(
+                raw = "im im going tomorrow",
+                autoCapitalization = true,
+                autoPunctuation = true,
+                profile = FormattingProfileStore.builtInProfile("default"),
+                grammarCorrection = true,
+                spellCorrection = true
+            )
+        )
+    }
+
+    @Test
+    fun partialFormattingDoesNotForceTerminalPunctuation() {
+        assertEquals(
+            "Can you send the report",
+            DictationTextFormatter.formatPartial(
+                raw = "can you send teh report",
+                profile = "default",
+                autoCapitalization = true,
+                grammarCorrection = true,
+                spellCorrection = true
+            )
+        )
+    }
 }
