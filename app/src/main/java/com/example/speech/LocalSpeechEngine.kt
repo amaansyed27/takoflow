@@ -58,6 +58,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     private val resourceLock = Any()
     private val whisperLock = Any()
     private val whisperInferenceLock = Any()
+    private val pcmLock = Any()
     private val sessionCounter = AtomicLong(0L)
 
     private var voskModel: Model? = null
@@ -67,6 +68,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     private var recordingJob: Job? = null
     private var transcriptionJob: Job? = null
     private var whisperPreparationJob: Job? = null
+    private var whisperLiveJob: Job? = null
     private var recordedPcm = ByteArrayOutputStream()
 
     @Volatile private var whisperBridge: WhisperBridge? = null
@@ -74,6 +76,9 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     @Volatile private var activeSession = 0L
     @Volatile private var voskAcceptCallbacks = false
     @Volatile private var voskStreaming = false
+    @Volatile private var whisperRecording = false
+    @Volatile private var lastWhisperLiveText = ""
+    @Volatile private var lastWhisperLiveSampleCount = 0
 
     var activeModel: String = SpeechModels.VOSK
         set(value) {
@@ -84,9 +89,24 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
             if (value == SpeechModels.WHISPER_TINY) prepareWhisper()
         }
 
+    var whisperMode: String = WhisperModes.BATCH
+        set(value) {
+            val normalized = WhisperModes.normalize(value)
+            if (
+                field != normalized &&
+                activeModel == SpeechModels.WHISPER_TINY &&
+                _speechState.value !is SpeechState.Idle
+            ) {
+                cancelListening()
+            }
+            field = normalized
+        }
+
     var activeLanguage: String = "English (US)"
     var autoPunctuation: Boolean = true
     var autoCapitalization: Boolean = true
+    var grammarCorrectionEnabled: Boolean = true
+    var spellCorrectionEnabled: Boolean = true
     var soundFeedbackEnabled: Boolean = true
     var vibrationFeedbackEnabled: Boolean = false
     var activeProfile: String = "default"
@@ -127,9 +147,13 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         activeSession = sessionCounter.incrementAndGet()
         voskAcceptCallbacks = false
         voskStreaming = false
+        whisperRecording = false
         voskStartJob?.cancel()
         transcriptionJob?.cancel()
+        whisperLiveJob?.cancel()
         recordingJob?.cancel()
+        lastWhisperLiveText = ""
+        lastWhisperLiveSampleCount = 0
 
         val service = synchronized(resourceLock) {
             speechService.also { speechService = null }
@@ -295,7 +319,12 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
             )
             check(minimum > 0) { "Android could not create an audio input buffer." }
 
-            recordedPcm = ByteArrayOutputStream()
+            synchronized(pcmLock) {
+                recordedPcm = ByteArrayOutputStream()
+            }
+            lastWhisperLiveText = ""
+            lastWhisperLiveSampleCount = 0
+
             val recorder = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 SAMPLE_RATE,
@@ -315,26 +344,38 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                 }
                 audioRecord = recorder
                 recorder.startRecording()
+                whisperRecording = true
             }
 
             _speechState.value = SpeechState.Listening()
             recordingJob = scope.launch {
                 val buffer = ShortArray(2048)
-                while (isCurrent(session) && recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                while (
+                    isCurrent(session) &&
+                    whisperRecording &&
+                    recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING
+                ) {
                     val read = recorder.read(buffer, 0, buffer.size)
                     if (read > 0) {
                         var peak = 0
-                        for (index in 0 until read) {
-                            val sample = buffer[index].toInt()
-                            recordedPcm.write(sample and 0xFF)
-                            recordedPcm.write((sample shr 8) and 0xFF)
-                            peak = max(peak, abs(sample))
+                        synchronized(pcmLock) {
+                            for (index in 0 until read) {
+                                val sample = buffer[index].toInt()
+                                recordedPcm.write(sample and 0xFF)
+                                recordedPcm.write((sample shr 8) and 0xFF)
+                                peak = max(peak, abs(sample))
+                            }
                         }
                         _rmsDb.value = (peak / Short.MAX_VALUE.toFloat()).coerceIn(0f, 1f)
                     }
                 }
             }
+
+            if (whisperMode == WhisperModes.LIVE) {
+                startWhisperLiveUpdates(session)
+            }
         } catch (error: Throwable) {
+            whisperRecording = false
             releaseAudioRecord()
             Log.e(TAG, "Could not start Whisper recording", error)
             if (isCurrent(session)) {
@@ -345,9 +386,53 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         }
     }
 
+    private fun startWhisperLiveUpdates(session: Long) {
+        whisperLiveJob?.cancel()
+        whisperLiveJob = scope.launch {
+            delay(WHISPER_LIVE_INITIAL_DELAY_MS)
+            while (isCurrent(session) && whisperRecording) {
+                try {
+                    val samples = snapshotWhisperSamples()
+                    if (samples.size >= WHISPER_LIVE_MIN_SAMPLES) {
+                        val bridge = getOrCreateWhisperBridge()
+                        val started = SystemClock.elapsedRealtime()
+                        val text = synchronized(whisperInferenceLock) {
+                            bridge.transcribe(samples)
+                        }
+                        currentCoroutineContext().ensureActive()
+                        if (isCurrent(session) && whisperRecording && text.isNotBlank()) {
+                            lastWhisperLiveText = text
+                            lastWhisperLiveSampleCount = samples.size
+                            _speechState.value = SpeechState.Listening(formatPartialText(text))
+                            Log.i(
+                                TAG,
+                                "Whisper live updated ${samples.size / SAMPLE_RATE.toFloat()} seconds in " +
+                                    "${SystemClock.elapsedRealtime() - started} ms"
+                            )
+                        }
+                    }
+                } catch (_: CancellationException) {
+                    throw CancellationException()
+                } catch (error: Throwable) {
+                    Log.w(TAG, "Whisper live update failed; recording continues", error)
+                }
+
+                val sampleCount = synchronized(pcmLock) { recordedPcm.size() / 2 }
+                val interval = when {
+                    sampleCount < SAMPLE_RATE * 8 -> 850L
+                    sampleCount < SAMPLE_RATE * 15 -> 1_250L
+                    else -> 1_800L
+                }
+                delay(interval)
+            }
+        }
+    }
+
     private fun stopWhisperAndTranscribe(session: Long) {
         if (_speechState.value !is SpeechState.Listening) return
-        _speechState.value = SpeechState.Processing("Transcribing on device…")
+        whisperRecording = false
+        whisperLiveJob?.cancel()
+        _speechState.value = SpeechState.Processing("Finishing transcription…")
         try {
             audioRecord?.stop()
         } catch (_: Throwable) {
@@ -356,7 +441,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         transcriptionJob = scope.launch {
             try {
                 recordingJob?.join()
-                val samples = pcm16ToFloat(recordedPcm.toByteArray())
+                val samples = snapshotWhisperSamples()
                 releaseAudioRecord()
                 currentCoroutineContext().ensureActive()
                 if (!isCurrent(session)) return@launch
@@ -365,19 +450,29 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                     return@launch
                 }
 
-                val bridge = getOrCreateWhisperBridge()
-                val started = SystemClock.elapsedRealtime()
-                val text = synchronized(whisperInferenceLock) {
-                    bridge.transcribe(samples)
+                val canReuseLiveResult =
+                    whisperMode == WhisperModes.LIVE &&
+                        lastWhisperLiveText.isNotBlank() &&
+                        samples.size - lastWhisperLiveSampleCount in 0..(SAMPLE_RATE / 2)
+
+                val text = if (canReuseLiveResult) {
+                    lastWhisperLiveText
+                } else {
+                    val bridge = getOrCreateWhisperBridge()
+                    val started = SystemClock.elapsedRealtime()
+                    val result = synchronized(whisperInferenceLock) {
+                        bridge.transcribe(samples)
+                    }
+                    Log.i(
+                        TAG,
+                        "Whisper processed ${samples.size / SAMPLE_RATE.toFloat()} seconds in " +
+                            "${SystemClock.elapsedRealtime() - started} ms"
+                    )
+                    result
                 }
+
                 currentCoroutineContext().ensureActive()
                 if (!isCurrent(session)) return@launch
-
-                Log.i(
-                    TAG,
-                    "Whisper processed ${samples.size / SAMPLE_RATE.toFloat()} seconds in " +
-                        "${SystemClock.elapsedRealtime() - started} ms"
-                )
                 _speechState.value = if (text.isBlank()) {
                     SpeechState.Error("No speech was detected.")
                 } else {
@@ -392,6 +487,8 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                     )
                 }
             } finally {
+                lastWhisperLiveText = ""
+                lastWhisperLiveSampleCount = 0
                 _rmsDb.value = 0f
             }
         }
@@ -400,7 +497,9 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     override fun onPartialResult(hypothesis: String?) {
         if (!voskAcceptCallbacks) return
         val partial = parseResult(hypothesis, "partial").orEmpty()
-        if (partial.isNotBlank()) _speechState.value = SpeechState.Listening(partial)
+        if (partial.isNotBlank()) {
+            _speechState.value = SpeechState.Listening(formatPartialText(partial))
+        }
     }
 
     override fun onResult(hypothesis: String?) {
@@ -453,7 +552,17 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
         raw = raw,
         autoCapitalization = autoCapitalization,
         autoPunctuation = autoPunctuation,
-        profile = activeProfile
+        profile = activeProfile,
+        grammarCorrection = grammarCorrectionEnabled,
+        spellCorrection = spellCorrectionEnabled
+    )
+
+    private fun formatPartialText(raw: String): String = DictationTextFormatter.formatPartial(
+        raw = raw,
+        profile = activeProfile,
+        autoCapitalization = autoCapitalization,
+        grammarCorrection = grammarCorrectionEnabled,
+        spellCorrection = spellCorrectionEnabled
     )
 
     private fun triggerFeedback() {
@@ -479,7 +588,12 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
                 }
                 if (vibrator.hasVibrator()) {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        vibrator.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
+                        vibrator.vibrate(
+                            VibrationEffect.createOneShot(
+                                40,
+                                VibrationEffect.DEFAULT_AMPLITUDE
+                            )
+                        )
                     } else {
                         @Suppress("DEPRECATION")
                         vibrator.vibrate(40)
@@ -489,6 +603,9 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
             }
         }
     }
+
+    private fun snapshotWhisperSamples(): FloatArray =
+        synchronized(pcmLock) { pcm16ToFloat(recordedPcm.toByteArray()) }
 
     private fun pcm16ToFloat(bytes: ByteArray): FloatArray {
         val output = FloatArray(bytes.size / 2)
@@ -551,5 +668,7 @@ class LocalSpeechEngine(private val context: Context) : RecognitionListener {
     private companion object {
         const val TAG = "LocalSpeechEngine"
         const val SAMPLE_RATE = 16_000
+        const val WHISPER_LIVE_INITIAL_DELAY_MS = 700L
+        const val WHISPER_LIVE_MIN_SAMPLES = SAMPLE_RATE * 3 / 4
     }
 }
