@@ -49,7 +49,7 @@ internal class ImeEditorController(
         val info = editorInfoProvider()
         val imeOptions = info?.imeOptions ?: EditorInfo.IME_ACTION_NONE
         val action = imeOptions and EditorInfo.IME_MASK_ACTION
-        val noEnterAction = imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
+        val noEnterAction = (imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
 
         val actionable = !noEnterAction &&
             action != EditorInfo.IME_ACTION_NONE &&
@@ -60,8 +60,8 @@ internal class ImeEditorController(
         }
 
         val inputType = info?.inputType ?: 0
-        val multiline = inputType and InputType.TYPE_CLASS_TEXT == InputType.TYPE_CLASS_TEXT &&
-            inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
+        val multiline = (inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT &&
+            (inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
 
         if (multiline && runCatching { connection.commitText("\n", 1) }.getOrDefault(false)) {
             return
