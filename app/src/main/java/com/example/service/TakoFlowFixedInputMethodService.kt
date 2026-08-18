@@ -4,7 +4,6 @@ import android.content.Context
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.text.InputType
-import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -46,6 +45,7 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
     private lateinit var settings: SettingsRepository
     private lateinit var profiles: FormattingProfileRepository
     private lateinit var speechEngine: LocalSpeechEngine
+    private lateinit var editorController: ImeEditorController
     private val sensitiveField = MutableStateFlow(false)
     private var hasSpeechComposition = false
 
@@ -59,6 +59,10 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
         settings = container.settings
         profiles = container.profiles
         speechEngine = container.createSpeechEngine()
+        editorController = ImeEditorController(
+            connectionProvider = { currentInputConnection },
+            editorInfoProvider = { currentInputEditorInfo }
+        )
         installWindowTreeOwners()
     }
 
@@ -162,15 +166,15 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
                             onSwitchKeyboard = ::switchBackToTypingKeyboard,
                             onSpace = {
                                 finishSpeechComposition()
-                                currentInputConnection?.commitText(" ", 1)
+                                editorController.insertSpace()
                             },
                             onDelete = {
                                 finishSpeechComposition()
-                                currentInputConnection?.deleteSurroundingText(1, 0)
+                                editorController.deleteBackward()
                             },
                             onEnter = {
                                 finishSpeechComposition()
-                                sendEnter()
+                                editorController.sendEnter()
                             }
                         )
                     }
@@ -190,18 +194,6 @@ class TakoFlowFixedInputMethodService : InputMethodService(), LifecycleOwner, Sa
         if (removeText) currentInputConnection?.setComposingText("", 1)
         currentInputConnection?.finishComposingText()
         hasSpeechComposition = false
-    }
-
-    private fun sendEnter() {
-        val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-            ?: EditorInfo.IME_ACTION_NONE
-        val handled = action != EditorInfo.IME_ACTION_NONE &&
-            action != EditorInfo.IME_ACTION_UNSPECIFIED &&
-            currentInputConnection?.performEditorAction(action) == true
-        if (!handled) {
-            currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-            currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
-        }
     }
 
     @Suppress("DEPRECATION")
